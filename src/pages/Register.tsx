@@ -23,10 +23,10 @@ export default function Register() {
   const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!authLoading && user && !loading) {
       setLocation("/dashboard");
     }
-  }, [user, authLoading, setLocation]);
+  }, [user, authLoading, loading, setLocation]);
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
