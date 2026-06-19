@@ -7,7 +7,7 @@ import QRCodeCard from "@/components/QRCodeCard";
 import { 
   LogOut, Store, User, Mail, Phone, Calendar, 
   Users, Plus, Edit, Trash2, Eye, Coins, Loader2, 
-  Search, X, Sparkles, TrendingUp, AlertCircle, ArrowLeft, QrCode
+  Search, X, Sparkles, TrendingUp, AlertCircle, ArrowLeft, QrCode, ShieldAlert
 } from "lucide-react";
 
 interface Customer {
