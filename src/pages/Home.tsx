@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { testConnection } from "@/lib/testConnection";
 import { Star, Users, Tag, CreditCard, BarChart, QrCode, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { Link } from "wouter";
 
@@ -50,7 +51,9 @@ export default function Home() {
   const handleHeroMouseLeave = () => {
     setHeroRotation({ x: 0, y: 0 });
   };
-
+  useEffect(() => {
+    testConnection();
+  }, []);
   // Particles
   useEffect(() => {
     const canvas = document.getElementById('particle-canvas') as HTMLCanvasElement;
@@ -111,11 +114,13 @@ export default function Home() {
           <a href="#features" className="hover:text-white transition-colors" data-testid="nav-features">Features</a>
           <a href="#how-it-works" className="hover:text-white transition-colors" data-testid="nav-how-it-works">How It Works</a>
           <a href="#pricing" className="hover:text-white transition-colors" data-testid="nav-pricing">Pricing</a>
-          <a href="#login" className="hover:text-white transition-colors" data-testid="nav-login">Login</a>
+          <Link href="/login" className="hover:text-white transition-colors" data-testid="nav-login">Login</Link>
         </div>
-        <button className="bg-primary text-primary-foreground px-5 py-2 rounded-full font-semibold hover:bg-gold/90 transition-colors" data-testid="nav-cta">
-          Get Vendly Free
-        </button>
+        <Link href="/register">
+          <button className="bg-primary text-primary-foreground px-5 py-2 rounded-full font-semibold hover:bg-gold/90 transition-colors cursor-pointer" data-testid="nav-cta">
+            Get Vendly Free
+          </button>
+        </Link>
       </nav>
 
       {/* HERO SECTION */}
@@ -154,10 +159,12 @@ export default function Home() {
           </p>
           
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <button className="bg-primary text-primary-foreground px-8 py-4 rounded-full font-bold text-lg hover:bg-gold/90 transition-all hover:scale-105 gold-glow" data-testid="hero-primary-cta">
-              Start with Vendly Free
-            </button>
-            <button className="border-2 border-blue text-blue px-8 py-4 rounded-full font-bold text-lg hover:bg-blue/10 transition-all hover:scale-105 blue-glow" data-testid="hero-secondary-cta">
+            <Link href="/register">
+              <button className="bg-primary text-primary-foreground px-8 py-4 rounded-full font-bold text-lg hover:bg-gold/90 transition-all hover:scale-105 gold-glow cursor-pointer" data-testid="hero-primary-cta">
+                Start with Vendly Free
+              </button>
+            </Link>
+            <button className="border-2 border-blue text-blue px-8 py-4 rounded-full font-bold text-lg hover:bg-blue/10 transition-all hover:scale-105 blue-glow cursor-pointer" data-testid="hero-secondary-cta">
               Watch Demo
             </button>
           </div>
@@ -414,9 +421,11 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-              <button className="w-full border-2 border-white/20 text-white px-6 py-3 rounded-xl font-bold hover:bg-white/10 transition-colors" data-testid="btn-starter">
-                Start Free
-              </button>
+              <Link href="/register">
+                <button className="w-full border-2 border-white/20 text-white px-6 py-3 rounded-xl font-bold hover:bg-white/10 transition-colors cursor-pointer" data-testid="btn-starter">
+                  Start Free
+                </button>
+              </Link>
             </div>
             
             {/* Growth */}
@@ -434,9 +443,11 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-              <button className="w-full bg-primary text-primary-foreground px-6 py-3 rounded-xl font-bold hover:bg-gold/90 transition-colors" data-testid="btn-growth">
-                Start Growing
-              </button>
+              <Link href="/register">
+                <button className="w-full bg-primary text-primary-foreground px-6 py-3 rounded-xl font-bold hover:bg-gold/90 transition-colors cursor-pointer" data-testid="btn-growth">
+                  Start Growing
+                </button>
+              </Link>
             </div>
             
             {/* Pro */}
@@ -451,9 +462,11 @@ export default function Home() {
                   </li>
                 ))}
               </ul>
-              <button className="w-full border-2 border-blue text-blue px-6 py-3 rounded-xl font-bold hover:bg-blue/10 transition-colors" data-testid="btn-pro">
-                Go Pro
-              </button>
+              <Link href="/register">
+                <button className="w-full border-2 border-blue text-blue px-6 py-3 rounded-xl font-bold hover:bg-blue/10 transition-colors cursor-pointer" data-testid="btn-pro">
+                  Go Pro
+                </button>
+              </Link>
             </div>
           </div>
         </div>
