@@ -273,11 +273,19 @@ export default function Register() {
           </form>
 
           {/* Redirect to Login Link */}
-          <div className="mt-8 text-center text-sm text-muted-foreground">
-            Already have a vendor account?{" "}
-            <Link href="/login" className="text-gold font-bold hover:underline">
-              Log In
-            </Link>
+          <div className="mt-8 text-center text-sm text-muted-foreground space-y-3">
+            <div>
+              Already have a vendor account?{" "}
+              <Link href="/login" className="text-gold font-bold hover:underline">
+                Log In
+              </Link>
+            </div>
+            <div className="pt-4 border-t border-white/5">
+              Are you a customer?{" "}
+              <Link href="/customer/register" className="text-gold font-bold hover:underline">
+                Sign Up as Customer
+              </Link>
+            </div>
           </div>
         </div>
       </div>

@@ -281,11 +281,19 @@ export default function Login() {
                     Sign Up
                   </Link>
                 </div>
-                <div className="pt-4 border-t border-white/5">
-                  Are you a customer?{" "}
-                  <Link href="/customer/login" className="text-gold font-bold hover:underline">
-                    Sign In here
-                  </Link>
+                <div className="pt-4 border-t border-white/5 flex flex-col gap-2">
+                  <div>
+                    Are you a customer?{" "}
+                    <Link href="/customer/login" className="text-gold font-bold hover:underline">
+                      Sign In here
+                    </Link>
+                  </div>
+                  <div>
+                    Want to register as a customer?{" "}
+                    <Link href="/customer/register" className="text-gold font-bold hover:underline">
+                      Sign Up here
+                    </Link>
+                  </div>
                 </div>
               </div>
             </>

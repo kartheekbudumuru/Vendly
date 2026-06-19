@@ -314,6 +314,12 @@ ON public.transactions FOR INSERT
 TO anon, authenticated 
 WITH CHECK (true);
 
+-- Customers need to register/sign up themselves
+CREATE POLICY "Allow public inserts of customers for registration" 
+ON public.customers FOR INSERT 
+TO anon, authenticated 
+WITH CHECK (true);
+
 
 -- ==========================================
 -- 11. INDEXES
