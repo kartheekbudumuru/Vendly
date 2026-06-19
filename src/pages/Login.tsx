@@ -274,11 +274,19 @@ export default function Login() {
               </form>
 
               {/* Toggle to Register */}
-              <div className="mt-8 text-center text-sm text-muted-foreground">
-                Don't have a vendor account yet?{" "}
-                <Link href="/register" className="text-gold font-bold hover:underline">
-                  Sign Up
-                </Link>
+              <div className="mt-8 text-center text-sm text-muted-foreground space-y-3">
+                <div>
+                  Don't have a vendor account yet?{" "}
+                  <Link href="/register" className="text-gold font-bold hover:underline">
+                    Sign Up
+                  </Link>
+                </div>
+                <div className="pt-4 border-t border-white/5">
+                  Are you a customer?{" "}
+                  <Link href="/customer/login" className="text-gold font-bold hover:underline">
+                    Sign In here
+                  </Link>
+                </div>
               </div>
             </>
           )}

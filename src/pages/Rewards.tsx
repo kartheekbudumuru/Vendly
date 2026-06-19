@@ -324,6 +324,8 @@ export default function Rewards() {
             <Link href="/customers" className="text-muted hover:text-white transition-colors">Customers</Link>
             <Link href="/rewards" className="text-white border-b-2 border-gold pb-1 pt-1 font-bold">Rewards</Link>
             <Link href="/qr-scanner" className="text-muted hover:text-white transition-colors">Scan QR</Link>
+            <Link href="/offers" className="text-muted hover:text-white transition-colors">Offers</Link>
+            <Link href="/prebookings" className="text-muted hover:text-white transition-colors">Prebookings</Link>
           </div>
         </div>
         <div className="flex items-center gap-3">

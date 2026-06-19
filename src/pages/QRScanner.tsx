@@ -260,6 +260,8 @@ export default function QRScanner() {
             <Link href="/customers" className="text-muted hover:text-white transition-colors">Customers</Link>
             <Link href="/rewards" className="text-muted hover:text-white transition-colors">Rewards</Link>
             <Link href="/qr-scanner" className="text-white border-b-2 border-gold pb-1 pt-1 font-bold">Scan QR</Link>
+            <Link href="/offers" className="text-muted hover:text-white transition-colors">Offers</Link>
+            <Link href="/prebookings" className="text-muted hover:text-white transition-colors">Prebookings</Link>
           </div>
         </div>
         <button onClick={handleSignOut}

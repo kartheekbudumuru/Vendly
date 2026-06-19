@@ -9,7 +9,7 @@ import {
   TrendingUp, Users, Award, ShieldAlert, Plus,
   CreditCard, Gift, Clock, Trash2, X, Check,
   Coins, ArrowRight, Sparkles, ChevronRight, ListCollapse,
-  Loader2, QrCode
+  Loader2, QrCode, ShoppingBag, Tag
 } from "lucide-react";
 
 interface Customer {
@@ -54,7 +54,8 @@ export default function Dashboard() {
     totalCustomers: 0,
     totalTransactions: 0,
     pointsIssued: 0,
-    activeRewards: 0
+    activeRewards: 0,
+    pendingPrebookings: 0
   });
 
   const [dataLoading, setDataLoading] = useState(true);
@@ -146,11 +147,21 @@ export default function Dashboard() {
       // Aggregates
       const totalPoints = loadedTransactions.reduce((sum, tx) => sum + tx.points_earned, 0);
 
+      // 4. Fetch Pending Prebookings count
+      const { count: prebookCount, error: prebookError } = await supabase
+        .from("prebookings")
+        .select("*", { count: "exact", head: true })
+        .eq("vendor_id", vendor.id)
+        .eq("status", "pending");
+
+      if (prebookError) throw prebookError;
+
       setStats({
         totalCustomers: loadedCustomers.length,
         totalTransactions: loadedTransactions.length,
         pointsIssued: totalPoints,
-        activeRewards: loadedRewards.length
+        activeRewards: loadedRewards.length,
+        pendingPrebookings: prebookCount || 0
       });
 
     } catch (err: any) {
@@ -181,6 +192,9 @@ export default function Dashboard() {
         fetchDashboardData();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "rewards" }, () => {
+        fetchDashboardData();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "prebookings" }, () => {
         fetchDashboardData();
       })
       .subscribe();
@@ -420,10 +434,16 @@ export default function Dashboard() {
               Rewards
             </Link>
             <Link
-              href="/qr-scanner"
+              href="/offers"
               className="text-muted hover:text-white transition-colors"
             >
-              Scan QR
+              Offers
+            </Link>
+            <Link
+              href="/prebookings"
+              className="text-muted hover:text-white transition-colors"
+            >
+              Prebookings
             </Link>
           </div>
         </div>
@@ -489,16 +509,31 @@ export default function Dashboard() {
               <QrCode className="w-4 h-4" />
               Scan QR
             </Link>
+            <Link
+              href="/offers"
+              className="bg-white/5 border border-white/10 hover:border-purple-400 hover:text-purple-400 px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-purple-400/5 transition-all cursor-pointer"
+            >
+              <Tag className="w-4 h-4" />
+              Manage Offers
+            </Link>
+            <Link
+              href="/prebookings"
+              className="bg-white/5 border border-white/10 hover:border-blue hover:text-blue px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-blue/5 transition-all cursor-pointer"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              Prebookings
+            </Link>
           </div>
         </div>
 
         {/* METRICS CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-10">
           {[
             { label: "Total Customers", val: stats.totalCustomers, icon: <Users className="w-6 h-6 text-gold" />, color: "border-gold/20" },
             { label: "Total Transactions", val: stats.totalTransactions, icon: <CreditCard className="w-6 h-6 text-blue" />, color: "border-blue/20" },
             { label: "Loyalty Points Issued", val: stats.pointsIssued, icon: <Coins className="w-6 h-6 text-emerald" />, color: "border-emerald/20" },
-            { label: "Active Rewards", val: stats.activeRewards, icon: <Gift className="w-6 h-6 text-purple-400" />, color: "border-purple-400/20" }
+            { label: "Active Rewards", val: stats.activeRewards, icon: <Gift className="w-6 h-6 text-purple-400" />, color: "border-purple-400/20" },
+            { label: "Pending Prebookings", val: stats.pendingPrebookings, icon: <ShoppingBag className="w-6 h-6 text-pink-400" />, color: "border-pink-400/20" }
           ].map((stat, i) => (
             <div key={i} className={`glass-panel p-6 rounded-2xl flex flex-col justify-between hover:scale-[1.01] transition-transform duration-300 border ${stat.color}`}>
               {dataLoading ? (

@@ -222,3 +222,103 @@ CREATE INDEX IF NOT EXISTS idx_redemptions_reward ON public.redemption_history(r
 -- UPDATE public.customers SET qr_token = gen_random_uuid()::text WHERE qr_token IS NULL;
 -- ALTER TABLE public.customers ALTER COLUMN qr_token SET NOT NULL;
 -- CREATE INDEX IF NOT EXISTS idx_customers_qr_token ON public.customers(qr_token);
+
+
+-- ==========================================
+-- 8. OFFERS TABLE (Store Deals)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.offers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    vendor_id UUID NOT NULL REFERENCES public.vendors(id) ON DELETE CASCADE,
+    item_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    original_price NUMERIC(10, 2),
+    offer_price NUMERIC(10, 2) NOT NULL,
+    points_cost INTEGER NOT NULL DEFAULT 50 CHECK (points_cost >= 0),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+ALTER TABLE public.offers ENABLE ROW LEVEL SECURITY;
+
+-- Policies for offers
+CREATE POLICY "Anyone can view offers" 
+ON public.offers FOR SELECT 
+TO anon, authenticated 
+USING (true);
+
+CREATE POLICY "Vendors can manage their own offers" 
+ON public.offers FOR ALL 
+TO authenticated 
+USING (vendor_id = auth.uid())
+WITH CHECK (vendor_id = auth.uid());
+
+
+-- ==========================================
+-- 9. PREBOOKINGS TABLE
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.prebookings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    vendor_id UUID NOT NULL REFERENCES public.vendors(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
+    offer_id UUID NOT NULL REFERENCES public.offers(id) ON DELETE CASCADE,
+    points_deducted INTEGER NOT NULL CHECK (points_deducted >= 0),
+    status VARCHAR(50) DEFAULT 'pending' NOT NULL, -- 'pending', 'claimed', 'cancelled'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+ALTER TABLE public.prebookings ENABLE ROW LEVEL SECURITY;
+
+-- Policies for prebookings
+CREATE POLICY "Anyone can insert prebookings" 
+ON public.prebookings FOR INSERT 
+TO anon, authenticated 
+WITH CHECK (true);
+
+CREATE POLICY "Customers and vendors can view prebookings" 
+ON public.prebookings FOR SELECT 
+TO anon, authenticated 
+USING (true);
+
+CREATE POLICY "Vendors can update prebookings status" 
+ON public.prebookings FOR UPDATE 
+TO authenticated 
+USING (vendor_id = auth.uid())
+WITH CHECK (vendor_id = auth.uid());
+
+
+-- ==========================================
+-- 10. PUBLIC ACCESS POLICIES ON EXISTING TABLES
+-- ==========================================
+-- Customers need to view their customer record to see points balance and QR tokens
+CREATE POLICY "Allow public lookups of customers by phone" 
+ON public.customers FOR SELECT 
+TO anon, authenticated 
+USING (true);
+
+-- Customers need to deduct points when prebooking (updates customer point balance)
+CREATE POLICY "Allow public updates of customer points for prebooking" 
+ON public.customers FOR UPDATE 
+TO anon, authenticated 
+USING (true)
+WITH CHECK (true);
+
+-- Customers need to read vendor profile details (store name, etc.)
+CREATE POLICY "Allow public select of vendors" 
+ON public.vendors FOR SELECT 
+TO anon, authenticated 
+USING (true);
+
+-- Customers need to insert a transaction to log point deductions
+CREATE POLICY "Allow public insert of transactions" 
+ON public.transactions FOR INSERT 
+TO anon, authenticated 
+WITH CHECK (true);
+
+
+-- ==========================================
+-- 11. INDEXES
+-- ==========================================
+CREATE INDEX IF NOT EXISTS idx_offers_vendor ON public.offers(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_prebookings_vendor ON public.prebookings(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_prebookings_customer ON public.prebookings(customer_id);
+

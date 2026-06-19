@@ -11,6 +11,11 @@ import Dashboard from "@/pages/Dashboard";
 import Customers from "@/pages/Customers";
 import Rewards from "@/pages/Rewards";
 import QRScanner from "@/pages/QRScanner";
+import CustomerLogin from "@/pages/CustomerLogin";
+import CustomerPortal from "@/pages/CustomerPortal";
+import CustomerStoreView from "@/pages/CustomerStoreView";
+import VendorOffers from "@/pages/VendorOffers";
+import VendorPrebookings from "@/pages/VendorPrebookings";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { AuthProvider } from "@/hooks/use-auth";
 
@@ -48,7 +53,21 @@ function Router() {
           <QRScanner />
         </ProtectedRoute>
       </Route>
+      <Route path="/customer/login" component={CustomerLogin} />
+      <Route path="/customer/portal" component={CustomerPortal} />
+      <Route path="/customer/store/:vendorId" component={CustomerStoreView} />
+      <Route path="/offers">
+        <ProtectedRoute>
+          <VendorOffers />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/prebookings">
+        <ProtectedRoute>
+          <VendorPrebookings />
+        </ProtectedRoute>
+      </Route>
       <Route component={NotFound} />
+
     </Switch>
   );
 }

@@ -332,6 +332,18 @@ export default function Customers() {
             >
               Scan QR
             </Link>
+            <Link
+              href="/offers"
+              className="text-muted hover:text-white transition-colors"
+            >
+              Offers
+            </Link>
+            <Link
+              href="/prebookings"
+              className="text-muted hover:text-white transition-colors"
+            >
+              Prebookings
+            </Link>
           </div>
         </div>
         
