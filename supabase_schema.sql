@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS public.customers (
     customer_name VARCHAR(255) NOT NULL,
     phone VARCHAR(50),
     email VARCHAR(255),
+    password VARCHAR(255),
     points INTEGER DEFAULT 0 NOT NULL,
     qr_token VARCHAR(64) UNIQUE NOT NULL DEFAULT gen_random_uuid()::text,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
@@ -222,6 +223,9 @@ CREATE INDEX IF NOT EXISTS idx_redemptions_reward ON public.redemption_history(r
 -- UPDATE public.customers SET qr_token = gen_random_uuid()::text WHERE qr_token IS NULL;
 -- ALTER TABLE public.customers ALTER COLUMN qr_token SET NOT NULL;
 -- CREATE INDEX IF NOT EXISTS idx_customers_qr_token ON public.customers(qr_token);
+
+-- Password support for existing customers tables:
+-- ALTER TABLE public.customers ADD COLUMN IF NOT EXISTS password VARCHAR(255);
 
 
 -- ==========================================

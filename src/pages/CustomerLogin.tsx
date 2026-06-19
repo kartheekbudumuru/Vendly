@@ -3,11 +3,12 @@ import { supabase } from "../lib/supabase";
 import { useLocation, Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  Phone, Loader2, ArrowLeft, Star, AlertCircle 
+  Phone, Loader2, ArrowLeft, Star, AlertCircle, Mail, Lock 
 } from "lucide-react";
 
 export default function CustomerLogin() {
-  const [phone, setPhone] = useState("");
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [, setLocation] = useLocation();
@@ -18,43 +19,49 @@ export default function CustomerLogin() {
     setError(null);
     setLoading(true);
 
-    if (!phone.trim()) {
-      setError("Please enter your phone number.");
+    if (!identifier.trim()) {
+      setError("Please enter your email or phone number.");
       setLoading(false);
       return;
     }
-
+    if (!password.trim()) {
+      setError("Please enter your password.");
+      setLoading(false);
+      return;
+    }
+ 
     try {
-      // Lookup customer by phone number
+      // Lookup customer by phone/email and password
       const { data, error: dbError } = await supabase
         .from("customers")
-        .select("id, customer_name, phone, vendor_id")
-        .eq("phone", phone.trim());
-
+        .select("id, customer_name, phone, email, password")
+        .or(`phone.eq.${identifier.trim()},email.eq.${identifier.trim().toLowerCase()}`)
+        .eq("password", password.trim());
+ 
       if (dbError) throw dbError;
-
+ 
       if (!data || data.length === 0) {
-        throw new Error("No customer profile found with this phone number. Please contact your store to register.");
+        throw new Error("Invalid credentials. Please verify your email/phone and password.");
       }
-
-      // Store customer session locally
-      localStorage.setItem("customer_phone", phone.trim());
+ 
+      // Store customer session locally using their phone number
+      localStorage.setItem("customer_phone", data[0].phone);
       localStorage.setItem("customer_name", data[0].customer_name);
-
+ 
       toast({
-        title: "Welcome!",
+        title: "Welcome Back!",
         description: `Successfully signed in as ${data[0].customer_name}. Redirecting to your portal...`,
       });
-
+ 
       setLocation("/customer/portal");
-
+ 
     } catch (err: any) {
       console.error("Customer login failed:", err);
       setError(err.message || "An unexpected error occurred during login.");
       toast({
         variant: "destructive",
         title: "Sign In Failed",
-        description: err.message || "Please verify your phone number and try again.",
+        description: err.message || "Please verify your credentials and try again.",
       });
     } finally {
       setLoading(false);
@@ -90,7 +97,7 @@ export default function CustomerLogin() {
               Customer Sign In
             </h1>
             <p className="text-muted text-sm">
-              Enter your registered phone number to check points, view store offers, and prebook items.
+              Enter your email/phone and password to check points, view store offers, and prebook items.
             </p>
           </div>
 
@@ -102,21 +109,41 @@ export default function CustomerLogin() {
           )}
 
           <form onSubmit={handleLogin} className="space-y-5">
-            {/* Phone Number */}
+            {/* Email or Phone Number */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
-                Phone Number
+                Email or Phone Number
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Phone className="h-5 w-5 text-muted-foreground" />
+                  <Mail className="h-5 w-5 text-muted-foreground" />
                 </div>
                 <input
-                  type="tel"
+                  type="text"
                   required
-                  placeholder="e.g. 9876543210"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="e.g. 9876543210 or varun@example.com"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  className="block w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
+                Password
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <input
+                  type="password"
+                  required
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="block w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all text-sm"
                 />
               </div>

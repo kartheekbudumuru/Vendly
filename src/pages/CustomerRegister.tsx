@@ -3,7 +3,7 @@ import { supabase } from "../lib/supabase";
 import { useLocation, Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  Store, User, Mail, Phone, Loader2, ArrowLeft, Star, AlertCircle 
+  Store, User, Mail, Phone, Loader2, ArrowLeft, Star, AlertCircle, Lock 
 } from "lucide-react";
 
 interface Vendor {
@@ -16,6 +16,7 @@ export default function CustomerRegister() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [selectedVendorId, setSelectedVendorId] = useState("");
   const [vendors, setVendors] = useState<Vendor[]>([]);
   
@@ -69,6 +70,21 @@ export default function CustomerRegister() {
       setLoading(false);
       return;
     }
+    if (!email.trim()) {
+      setError("Please enter your email address.");
+      setLoading(false);
+      return;
+    }
+    if (!password.trim()) {
+      setError("Please enter a password.");
+      setLoading(false);
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      setLoading(false);
+      return;
+    }
     if (!selectedVendorId) {
       setError("Please select a store to register under.");
       setLoading(false);
@@ -76,20 +92,20 @@ export default function CustomerRegister() {
     }
 
     try {
-      // 1. Check if customer phone is already registered at the selected store
+      // 1. Check if customer phone or email is already registered at the selected store
       const { data: existing, error: checkError } = await supabase
         .from("customers")
         .select("id")
         .eq("vendor_id", selectedVendorId)
-        .eq("phone", phone.trim())
+        .or(`phone.eq.${phone.trim()},email.eq.${email.trim().toLowerCase()}`)
         .maybeSingle();
-
+ 
       if (checkError) throw checkError;
-
+ 
       if (existing) {
-        throw new Error("You are already registered under this store with this phone number. Try signing in.");
+        throw new Error("You are already registered under this store with this phone number or email. Try signing in.");
       }
-
+ 
       // 2. Insert customer profile
       const { error: insertError } = await supabase
         .from("customers")
@@ -98,7 +114,8 @@ export default function CustomerRegister() {
             vendor_id: selectedVendorId,
             customer_name: name.trim(),
             phone: phone.trim(),
-            email: email.trim() || null,
+            email: email.trim().toLowerCase(),
+            password: password.trim(),
             points: 0
           }
         ]);
@@ -215,7 +232,7 @@ export default function CustomerRegister() {
             {/* Email Address */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
-                Email Address <span className="text-[10px] text-muted-foreground font-normal">(Optional)</span>
+                Email Address
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -223,9 +240,30 @@ export default function CustomerRegister() {
                 </div>
                 <input
                   type="email"
+                  required
                   placeholder="e.g. varun@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  className="block w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Password */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
+                Password
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                  <Lock className="h-5 w-5 text-muted-foreground" />
+                </div>
+                <input
+                  type="password"
+                  required
+                  placeholder="Minimum 6 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   className="block w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all text-sm"
                 />
               </div>
