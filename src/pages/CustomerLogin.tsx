@@ -139,13 +139,23 @@ export default function CustomerLogin() {
             </button>
           </form>
 
-          <div className="mt-8 pt-6 border-t border-white/10 text-center">
-            <p className="text-muted text-xs">
-              Are you a merchant?{" "}
-              <Link href="/login" className="text-gold font-semibold hover:underline">
-                Log In here
-              </Link>
-            </p>
+          <div className="mt-8 pt-6 border-t border-white/10 text-center space-y-3">
+            <div>
+              <p className="text-muted text-xs">
+                New to Vendly?{" "}
+                <Link href="/customer/register" className="text-gold font-semibold hover:underline">
+                  Sign Up here
+                </Link>
+              </p>
+            </div>
+            <div>
+              <p className="text-muted text-xs">
+                Are you a merchant?{" "}
+                <Link href="/login" className="text-gold font-semibold hover:underline">
+                  Log In here
+                </Link>
+              </p>
+            </div>
           </div>
 
         </div>

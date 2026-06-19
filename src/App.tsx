@@ -12,6 +12,7 @@ import Customers from "@/pages/Customers";
 import Rewards from "@/pages/Rewards";
 import QRScanner from "@/pages/QRScanner";
 import CustomerLogin from "@/pages/CustomerLogin";
+import CustomerRegister from "@/pages/CustomerRegister";
 import CustomerPortal from "@/pages/CustomerPortal";
 import CustomerStoreView from "@/pages/CustomerStoreView";
 import VendorOffers from "@/pages/VendorOffers";
@@ -54,6 +55,7 @@ function Router() {
         </ProtectedRoute>
       </Route>
       <Route path="/customer/login" component={CustomerLogin} />
+      <Route path="/customer/register" component={CustomerRegister} />
       <Route path="/customer/portal" component={CustomerPortal} />
       <Route path="/customer/store/:vendorId" component={CustomerStoreView} />
       <Route path="/offers">
