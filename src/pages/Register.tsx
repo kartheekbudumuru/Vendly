@@ -125,7 +125,7 @@ export default function Register() {
       <header className="absolute top-0 left-0 right-0 z-50 px-6 py-6 max-w-6xl mx-auto flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 group text-muted hover:text-white transition-colors">
           <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-          <span className="text-sm font-medium">Back to Home</span>
+          <span className="text-sm font-medium">Back to Login</span>
         </Link>
         <Link href="/" className="flex items-center gap-2">
           <div className="text-gold font-bold text-2xl flex items-center">
