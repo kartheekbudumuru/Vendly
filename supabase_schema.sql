@@ -71,6 +71,9 @@ CREATE TABLE IF NOT EXISTS public.categories (
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow public select categories" ON public.categories FOR SELECT USING (true);
+CREATE POLICY "Allow authenticated insert categories" ON public.categories FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('vendor', 'admin'))
+);
 CREATE POLICY "Allow admins manage categories" ON public.categories FOR ALL USING (
     EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
 );

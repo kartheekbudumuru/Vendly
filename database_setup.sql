@@ -124,6 +124,15 @@ DROP POLICY IF EXISTS "Allow public select categories" ON public.categories;
 CREATE POLICY "Allow public select categories" ON public.categories
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Allow authenticated insert categories" ON public.categories;
+CREATE POLICY "Allow authenticated insert categories" ON public.categories
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role IN ('vendor', 'admin')
+    )
+  );
+
 DROP POLICY IF EXISTS "Allow admins manage categories" ON public.categories;
 CREATE POLICY "Allow admins manage categories" ON public.categories
   FOR ALL USING (
