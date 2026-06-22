@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Mail, Lock, Loader2, Star, AlertCircle } from "lucide-react";
 
 export default function Login() {
+  const [role, setRole] = useState<"customer" | "vendor">("customer");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -41,12 +42,27 @@ export default function Login() {
     }
 
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password: password.trim(),
       });
 
       if (authError) throw authError;
+
+      // 1. Fetch user profile to verify role
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", authData.user?.id)
+        .maybeSingle();
+
+      if (profileError) throw profileError;
+
+      if (profileData && profileData.role !== role && profileData.role !== "admin") {
+        // Sign out immediately if role mismatch
+        await supabase.auth.signOut();
+        throw new Error(`This account is registered as a ${profileData.role}. Please log in using the correct portal tab.`);
+      }
 
       toast({
         title: "Welcome Back!",
@@ -175,11 +191,29 @@ export default function Login() {
             </>
           ) : (
             <>
-              <div className="text-center mb-8">
+              <div className="text-center mb-6">
                 <h1 className="text-3xl font-extrabold text-white mb-2">Welcome to Vendly</h1>
                 <p className="text-muted text-xs">
-                  Log in to access products, checkouts, store settings, or platform analytics.
+                  Log in to access products, storefront checkouts, or seller dashboard.
                 </p>
+              </div>
+
+              {/* Portal Role Selector Tabs */}
+              <div className="grid grid-cols-2 gap-2 mb-6 bg-white/5 p-1.5 rounded-xl border border-white/10">
+                <button
+                  type="button"
+                  onClick={() => { setRole("customer"); setError(null); }}
+                  className={`py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${role === "customer" ? "bg-gold text-background shadow-md" : "text-muted-foreground hover:text-white"}`}
+                >
+                  Customer Portal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setRole("vendor"); setError(null); }}
+                  className={`py-2 rounded-lg text-xs font-extrabold transition-all cursor-pointer ${role === "vendor" ? "bg-gold text-background shadow-md" : "text-muted-foreground hover:text-white"}`}
+                >
+                  Seller Dashboard
+                </button>
               </div>
 
               {error && (
