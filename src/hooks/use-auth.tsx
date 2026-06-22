@@ -2,19 +2,26 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 import { User } from "@supabase/supabase-js";
 import { supabase } from "../lib/supabase";
 
-interface VendorProfile {
+export interface UserProfile {
   id: string;
   name: string;
   email: string;
-  phone: string;
-  business: string;
-  points_rule_amount: number;
-  points_rule_points: number;
+  role: "customer" | "vendor" | "admin";
+  created_at: string;
+}
+
+export interface VendorProfile {
+  id: string;
+  business_name: string;
+  description: string | null;
+  phone: string | null;
+  address: string | null;
   created_at: string;
 }
 
 interface AuthContextType {
   user: User | null;
+  profile: UserProfile | null;
   vendor: VendorProfile | null;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -25,39 +32,62 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [vendor, setVendor] = useState<VendorProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function fetchVendorProfile(userId: string) {
+  async function fetchUserProfileAndVendor(userId: string) {
     try {
-      const { data, error } = await supabase
-        .from("vendors")
+      // 1. Fetch core user profile
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
         .select("*")
         .eq("id", userId)
-        .single();
+        .maybeSingle();
 
-      if (error) {
-        // It's possible the user is registered in Auth but profile insertion failed or hasn't run yet.
-        console.warn("Could not fetch vendor profile:", error.message);
+      if (profileError || !profileData) {
+        console.warn("Could not fetch user profile details:", profileError?.message);
+        setProfile(null);
         setVendor(null);
+        return;
+      }
+
+      setProfile(profileData);
+
+      // 2. Fetch vendor info if role is vendor
+      if (profileData.role === "vendor") {
+        const { data: vendorData, error: vendorError } = await supabase
+          .from("vendors")
+          .select("*")
+          .eq("id", userId)
+          .maybeSingle();
+
+        if (vendorError) {
+          console.warn("Could not fetch vendor profile details:", vendorError.message);
+          setVendor(null);
+        } else {
+          setVendor(vendorData);
+        }
       } else {
-        setVendor(data);
+        setVendor(null);
       }
     } catch (err) {
-      console.error("Error fetching vendor profile:", err);
+      console.error("Error fetching auth details:", err);
+      setProfile(null);
       setVendor(null);
     }
   }
 
   async function refreshProfile() {
     if (user) {
-      await fetchVendorProfile(user.id);
+      await fetchUserProfileAndVendor(user.id);
     }
   }
 
   async function signOut() {
     await supabase.auth.signOut();
     setUser(null);
+    setProfile(null);
     setVendor(null);
   }
 
@@ -70,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (session?.user) {
           setUser(session.user);
-          await fetchVendorProfile(session.user.id);
+          await fetchUserProfileAndVendor(session.user.id);
         }
       } catch (err) {
         console.error("Auth initialization error:", err);
@@ -87,9 +117,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setLoading(true);
         if (session?.user) {
           setUser(session.user);
-          await fetchVendorProfile(session.user.id);
+          await fetchUserProfileAndVendor(session.user.id);
         } else {
           setUser(null);
+          setProfile(null);
           setVendor(null);
         }
         setLoading(false);
@@ -103,6 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value: AuthContextType = {
     user,
+    profile,
     vendor,
     loading,
     signOut,

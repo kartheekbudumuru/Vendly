@@ -8,68 +8,84 @@ import Register from "@/pages/Register";
 import Login from "@/pages/Login";
 import ResetPassword from "@/pages/ResetPassword";
 import Dashboard from "@/pages/Dashboard";
-import Customers from "@/pages/Customers";
-import Rewards from "@/pages/Rewards";
-import QRScanner from "@/pages/QRScanner";
-import CustomerLogin from "@/pages/CustomerLogin";
-import CustomerRegister from "@/pages/CustomerRegister";
+import ProductDetails from "@/pages/ProductDetails";
+import Cart from "@/pages/Cart";
+import Wishlist from "@/pages/Wishlist";
+import Checkout from "@/pages/Checkout";
 import CustomerPortal from "@/pages/CustomerPortal";
-import CustomerStoreView from "@/pages/CustomerStoreView";
 import VendorOffers from "@/pages/VendorOffers";
 import VendorPrebookings from "@/pages/VendorPrebookings";
+import AdminPanel from "@/pages/AdminPanel";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { AuthProvider } from "@/hooks/use-auth";
-
+import { CartProvider } from "@/hooks/use-cart";
 
 const queryClient = new QueryClient();
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={Login} />
+      <Route path="/" component={Home} />
       <Route path="/register" component={Register} />
       <Route path="/login" component={Login} />
+      
+      <Route path="/product/:productId" component={ProductDetails} />
+      
       <Route path="/reset-password">
         <ProtectedRoute>
           <ResetPassword />
         </ProtectedRoute>
       </Route>
-      <Route path="/customers">
+      
+      <Route path="/cart">
         <ProtectedRoute>
-          <Customers />
+          <Cart />
         </ProtectedRoute>
       </Route>
+      
+      <Route path="/wishlist">
+        <ProtectedRoute>
+          <Wishlist />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/checkout">
+        <ProtectedRoute>
+          <Checkout />
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/customer/portal">
+        <ProtectedRoute>
+          <CustomerPortal />
+        </ProtectedRoute>
+      </Route>
+      
       <Route path="/dashboard">
         <ProtectedRoute>
           <Dashboard />
         </ProtectedRoute>
       </Route>
-      <Route path="/rewards">
-        <ProtectedRoute>
-          <Rewards />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/qr-scanner">
-        <ProtectedRoute>
-          <QRScanner />
-        </ProtectedRoute>
-      </Route>
-      <Route path="/customer/login" component={CustomerLogin} />
-      <Route path="/customer/register" component={CustomerRegister} />
-      <Route path="/customer/portal" component={CustomerPortal} />
-      <Route path="/customer/store/:vendorId" component={CustomerStoreView} />
+      
       <Route path="/offers">
         <ProtectedRoute>
           <VendorOffers />
         </ProtectedRoute>
       </Route>
+      
       <Route path="/prebookings">
         <ProtectedRoute>
           <VendorPrebookings />
         </ProtectedRoute>
       </Route>
+      
+      <Route path="/admin">
+        <ProtectedRoute>
+          <AdminPanel />
+        </ProtectedRoute>
+      </Route>
+      
       <Route component={NotFound} />
-
     </Switch>
   );
 }
@@ -78,12 +94,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <TooltipProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <Router />
-          </WouterRouter>
-          <Toaster />
-        </TooltipProvider>
+        <CartProvider>
+          <TooltipProvider>
+            <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+              <Router />
+            </WouterRouter>
+            <Toaster />
+          </TooltipProvider>
+        </CartProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

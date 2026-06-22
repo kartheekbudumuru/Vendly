@@ -1,334 +1,241 @@
--- Supabase SQL Schema for Vendly (matching actual table columns)
+-- Supabase SQL Schema for E-commerce Platform
 
--- Enable UUID extension if not already enabled
+-- Drop old tables if they exist to prevent schema collision
+DROP TABLE IF EXISTS public.redemption_history CASCADE;
+DROP TABLE IF EXISTS public.rewards CASCADE;
+DROP TABLE IF EXISTS public.prebookings CASCADE;
+DROP TABLE IF EXISTS public.offers CASCADE;
+DROP TABLE IF EXISTS public.transactions CASCADE;
+DROP TABLE IF EXISTS public.customers CASCADE;
+DROP TABLE IF EXISTS public.vendors CASCADE;
+DROP TABLE IF EXISTS public.profiles CASCADE;
+DROP TABLE IF EXISTS public.categories CASCADE;
+DROP TABLE IF EXISTS public.products CASCADE;
+DROP TABLE IF EXISTS public.carts CASCADE;
+DROP TABLE IF EXISTS public.cart_items CASCADE;
+DROP TABLE IF EXISTS public.orders CASCADE;
+DROP TABLE IF EXISTS public.order_items CASCADE;
+DROP TABLE IF EXISTS public.reviews CASCADE;
+DROP TABLE IF EXISTS public.wishlists CASCADE;
+DROP TABLE IF EXISTS public.coupons CASCADE;
+
+-- Enable UUID-OSSP
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ==========================================
--- 1. VENDORS TABLE
+-- 1. PROFILES TABLE
 -- ==========================================
-CREATE TABLE IF NOT EXISTS public.vendors (
+CREATE TABLE IF NOT EXISTS public.profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
-    business VARCHAR(255) NOT NULL,
-    phone VARCHAR(50),
     email VARCHAR(255) UNIQUE NOT NULL,
-    points_rule_amount NUMERIC(10, 2) DEFAULT 100.00 NOT NULL,
-    points_rule_points INTEGER DEFAULT 10 NOT NULL,
+    role VARCHAR(50) DEFAULT 'customer' NOT NULL CHECK (role IN ('customer', 'vendor', 'admin')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Enable Row-Level Security
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public select profiles" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "Allow users update own profile" ON public.profiles FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Allow users insert own profile" ON public.profiles FOR INSERT WITH CHECK (true);
+
+-- ==========================================
+-- 2. VENDORS TABLE
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.vendors (
+    id UUID PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
+    business_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    phone VARCHAR(50),
+    address TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
 ALTER TABLE public.vendors ENABLE ROW LEVEL SECURITY;
 
--- Policies for vendors
-CREATE POLICY "Vendors can view their own profile" 
-ON public.vendors FOR SELECT 
-TO authenticated 
-USING (auth.uid() = id);
-
-CREATE POLICY "Vendors can insert their own profile" 
-ON public.vendors FOR INSERT 
-TO authenticated 
-WITH CHECK (auth.uid() = id);
-
-CREATE POLICY "Vendors can update their own profile" 
-ON public.vendors FOR UPDATE 
-TO authenticated 
-USING (auth.uid() = id) 
-WITH CHECK (auth.uid() = id);
-
-CREATE POLICY "Vendors can delete their own profile" 
-ON public.vendors FOR DELETE 
-TO authenticated 
-USING (auth.uid() = id);
-
+CREATE POLICY "Allow public select vendors" ON public.vendors FOR SELECT USING (true);
+CREATE POLICY "Allow vendors insert own storefront" ON public.vendors FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow vendors update own storefront" ON public.vendors FOR UPDATE USING (auth.uid() = id);
+CREATE POLICY "Allow vendors delete own storefront" ON public.vendors FOR DELETE USING (auth.uid() = id);
 
 -- ==========================================
--- 2. CUSTOMERS TABLE
+-- 3. CATEGORIES TABLE
 -- ==========================================
-CREATE TABLE IF NOT EXISTS public.customers (
+CREATE TABLE IF NOT EXISTS public.categories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    vendor_id UUID NOT NULL REFERENCES public.vendors(id) ON DELETE CASCADE,
-    customer_name VARCHAR(255) NOT NULL,
-    phone VARCHAR(50),
-    email VARCHAR(255),
-    password VARCHAR(255),
-    points INTEGER DEFAULT 0 NOT NULL,
-    qr_token VARCHAR(64) UNIQUE NOT NULL DEFAULT gen_random_uuid()::text,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
-);
-
--- Enable Row-Level Security
-ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
-
--- Policies for customers (checking vendor_id against authenticated auth.uid())
-CREATE POLICY "Vendors can view their own customers" 
-ON public.customers FOR SELECT 
-TO authenticated 
-USING (vendor_id = auth.uid());
-
-CREATE POLICY "Vendors can insert their own customers" 
-ON public.customers FOR INSERT 
-TO authenticated 
-WITH CHECK (vendor_id = auth.uid());
-
-CREATE POLICY "Vendors can update their own customers" 
-ON public.customers FOR UPDATE 
-TO authenticated 
-USING (vendor_id = auth.uid())
-WITH CHECK (vendor_id = auth.uid());
-
-CREATE POLICY "Vendors can delete their own customers" 
-ON public.customers FOR DELETE 
-TO authenticated 
-USING (vendor_id = auth.uid());
-
-
--- ==========================================
--- 3. TRANSACTIONS TABLE
--- ==========================================
-CREATE TABLE IF NOT EXISTS public.transactions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    vendor_id UUID NOT NULL REFERENCES public.vendors(id) ON DELETE CASCADE,
-    customer_id UUID NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
-    amount NUMERIC(10, 2) NOT NULL,
-    points_earned INTEGER DEFAULT 0 NOT NULL,
-    transaction_date TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
-);
-
--- Enable Row-Level Security
-ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY;
-
--- Policies for transactions
-CREATE POLICY "Vendors can view their own transactions" 
-ON public.transactions FOR SELECT 
-TO authenticated 
-USING (vendor_id = auth.uid());
-
-CREATE POLICY "Vendors can insert their own transactions" 
-ON public.transactions FOR INSERT 
-TO authenticated 
-WITH CHECK (vendor_id = auth.uid());
-
-CREATE POLICY "Vendors can update their own transactions" 
-ON public.transactions FOR UPDATE 
-TO authenticated 
-USING (vendor_id = auth.uid())
-WITH CHECK (vendor_id = auth.uid());
-
-CREATE POLICY "Vendors can delete their own transactions" 
-ON public.transactions FOR DELETE 
-TO authenticated 
-USING (vendor_id = auth.uid());
-
-
--- ==========================================
--- 4. REWARDS TABLE
--- ==========================================
-CREATE TABLE IF NOT EXISTS public.rewards (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    vendor_id UUID NOT NULL REFERENCES public.vendors(id) ON DELETE CASCADE,
-    reward_name VARCHAR(255) NOT NULL,
-    points_required INTEGER NOT NULL CHECK (points_required >= 0),
+    name VARCHAR(255) UNIQUE NOT NULL,
     description TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
--- Enable Row-Level Security
-ALTER TABLE public.rewards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 
--- Policies for rewards
-CREATE POLICY "Vendors can view their own rewards" 
-ON public.rewards FOR SELECT 
-TO authenticated 
-USING (vendor_id = auth.uid());
-
-CREATE POLICY "Vendors can insert their own rewards" 
-ON public.rewards FOR INSERT 
-TO authenticated 
-WITH CHECK (vendor_id = auth.uid());
-
-CREATE POLICY "Vendors can update their own rewards" 
-ON public.rewards FOR UPDATE 
-TO authenticated 
-USING (vendor_id = auth.uid())
-WITH CHECK (vendor_id = auth.uid());
-
-CREATE POLICY "Vendors can delete their own rewards" 
-ON public.rewards FOR DELETE 
-TO authenticated 
-USING (vendor_id = auth.uid());
-
-
--- ==========================================
--- 5. REDEMPTION HISTORY TABLE
--- ==========================================
-CREATE TABLE IF NOT EXISTS public.redemption_history (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    vendor_id UUID NOT NULL REFERENCES public.vendors(id) ON DELETE CASCADE,
-    customer_id UUID NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
-    reward_id UUID NOT NULL REFERENCES public.rewards(id) ON DELETE CASCADE,
-    points_deducted INTEGER NOT NULL,
-    redeemed_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+CREATE POLICY "Allow public select categories" ON public.categories FOR SELECT USING (true);
+CREATE POLICY "Allow admins manage categories" ON public.categories FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
 );
 
--- Enable Row-Level Security
-ALTER TABLE public.redemption_history ENABLE ROW LEVEL SECURITY;
-
--- Policies for redemption_history
-CREATE POLICY "Vendors can view their own redemptions"
-ON public.redemption_history FOR SELECT
-TO authenticated
-USING (vendor_id = auth.uid());
-
-CREATE POLICY "Vendors can insert their own redemptions"
-ON public.redemption_history FOR INSERT
-TO authenticated
-WITH CHECK (vendor_id = auth.uid());
-
-CREATE POLICY "Vendors can delete their own redemptions"
-ON public.redemption_history FOR DELETE
-TO authenticated
-USING (vendor_id = auth.uid());
-
-
 -- ==========================================
--- 6. PERFORMANCE INDEXES
+-- 4. PRODUCTS TABLE
 -- ==========================================
-
--- Indexes for customer lookup per vendor
-CREATE INDEX IF NOT EXISTS idx_customers_vendor ON public.customers(vendor_id);
-
--- Indexes for transaction lookups
-CREATE INDEX IF NOT EXISTS idx_transactions_vendor ON public.transactions(vendor_id);
-CREATE INDEX IF NOT EXISTS idx_transactions_customer ON public.transactions(customer_id);
-
--- Indexes for reward lookups
-CREATE INDEX IF NOT EXISTS idx_rewards_vendor ON public.rewards(vendor_id);
-
--- Indexes for redemption history
-CREATE INDEX IF NOT EXISTS idx_redemptions_vendor ON public.redemption_history(vendor_id);
-CREATE INDEX IF NOT EXISTS idx_redemptions_customer ON public.redemption_history(customer_id);
-CREATE INDEX IF NOT EXISTS idx_redemptions_reward ON public.redemption_history(reward_id);
-
--- ==========================================
--- 7. ALTER STATEMENTS (run on existing DBs)
--- ==========================================
--- Run these if your Supabase instance already has the tables:
--- ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS points_rule_amount NUMERIC(10,2) DEFAULT 100.00 NOT NULL;
--- ALTER TABLE public.vendors ADD COLUMN IF NOT EXISTS points_rule_points INTEGER DEFAULT 10 NOT NULL;
-
--- QR Token support for existing customers tables:
--- ALTER TABLE public.customers ADD COLUMN IF NOT EXISTS qr_token VARCHAR(64) UNIQUE DEFAULT gen_random_uuid()::text;
--- UPDATE public.customers SET qr_token = gen_random_uuid()::text WHERE qr_token IS NULL;
--- ALTER TABLE public.customers ALTER COLUMN qr_token SET NOT NULL;
--- CREATE INDEX IF NOT EXISTS idx_customers_qr_token ON public.customers(qr_token);
-
--- Password support for existing customers tables:
--- ALTER TABLE public.customers ADD COLUMN IF NOT EXISTS password VARCHAR(255);
-
-
--- ==========================================
--- 8. OFFERS TABLE (Store Deals)
--- ==========================================
-CREATE TABLE IF NOT EXISTS public.offers (
+CREATE TABLE IF NOT EXISTS public.products (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     vendor_id UUID NOT NULL REFERENCES public.vendors(id) ON DELETE CASCADE,
-    item_name VARCHAR(255) NOT NULL,
+    category_id UUID REFERENCES public.categories(id) ON DELETE SET NULL,
+    name VARCHAR(255) NOT NULL,
     description TEXT,
-    original_price NUMERIC(10, 2),
-    offer_price NUMERIC(10, 2) NOT NULL,
-    points_cost INTEGER NOT NULL DEFAULT 50 CHECK (points_cost >= 0),
+    price NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
+    image_url TEXT,
+    stock_quantity INTEGER DEFAULT 0 NOT NULL CHECK (stock_quantity >= 0),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
 );
 
-ALTER TABLE public.offers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
 
--- Policies for offers
-CREATE POLICY "Anyone can view offers" 
-ON public.offers FOR SELECT 
-TO anon, authenticated 
-USING (true);
-
-CREATE POLICY "Vendors can manage their own offers" 
-ON public.offers FOR ALL 
-TO authenticated 
-USING (vendor_id = auth.uid())
-WITH CHECK (vendor_id = auth.uid());
-
+CREATE POLICY "Allow public select products" ON public.products FOR SELECT USING (true);
+CREATE POLICY "Allow vendors manage own products" ON public.products FOR ALL USING (vendor_id = auth.uid());
+CREATE POLICY "Allow admins manage all products" ON public.products FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
 
 -- ==========================================
--- 9. PREBOOKINGS TABLE
+-- 5. CARTS TABLE
 -- ==========================================
-CREATE TABLE IF NOT EXISTS public.prebookings (
+CREATE TABLE IF NOT EXISTS public.carts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+ALTER TABLE public.carts ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow users select own cart" ON public.carts FOR SELECT USING (customer_id = auth.uid());
+CREATE POLICY "Allow users manage own cart" ON public.carts FOR ALL USING (customer_id = auth.uid());
+
+-- ==========================================
+-- 6. CART_ITEMS TABLE
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.cart_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    cart_id UUID NOT NULL REFERENCES public.carts(id) ON DELETE CASCADE,
+    product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+    quantity INTEGER DEFAULT 1 NOT NULL CHECK (quantity > 0),
+    UNIQUE(cart_id, product_id)
+);
+
+ALTER TABLE public.cart_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow users manage own cart items" ON public.cart_items FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.carts WHERE id = cart_id AND customer_id = auth.uid())
+);
+
+-- ==========================================
+-- 7. ORDERS TABLE
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    total_amount NUMERIC(10, 2) NOT NULL CHECK (total_amount >= 0),
+    status VARCHAR(50) DEFAULT 'pending' NOT NULL CHECK (status IN ('pending', 'paid', 'shipped', 'delivered', 'cancelled')),
+    shipping_address TEXT NOT NULL,
+    coupon_code VARCHAR(50),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow users select own orders" ON public.orders FOR SELECT USING (customer_id = auth.uid() OR EXISTS (
+    SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('vendor', 'admin')
+));
+CREATE POLICY "Allow customers insert own orders" ON public.orders FOR INSERT WITH CHECK (customer_id = auth.uid());
+CREATE POLICY "Allow admins update all orders" ON public.orders FOR UPDATE USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+-- ==========================================
+-- 8. ORDER_ITEMS TABLE
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.order_items (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+    product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
+    vendor_id UUID NOT NULL REFERENCES public.vendors(id) ON DELETE CASCADE,
+    price NUMERIC(10, 2) NOT NULL CHECK (price >= 0),
+    quantity INTEGER NOT NULL CHECK (quantity > 0)
+);
+
+ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow users select own order items" ON public.order_items FOR SELECT USING (
+    EXISTS (SELECT 1 FROM public.orders WHERE id = order_id AND customer_id = auth.uid())
+    OR vendor_id = auth.uid()
+    OR EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+CREATE POLICY "Allow customers insert own order items" ON public.order_items FOR INSERT WITH CHECK (
+    EXISTS (SELECT 1 FROM public.orders WHERE id = order_id AND customer_id = auth.uid())
+);
+CREATE POLICY "Allow vendors update order items" ON public.order_items FOR UPDATE USING (
+    vendor_id = auth.uid()
+);
+
+-- ==========================================
+-- 9. REVIEWS TABLE
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.reviews (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+ALTER TABLE public.reviews ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow public select reviews" ON public.reviews FOR SELECT USING (true);
+CREATE POLICY "Allow customers insert own reviews" ON public.reviews FOR INSERT WITH CHECK (customer_id = auth.uid());
+CREATE POLICY "Allow customers manage own reviews" ON public.reviews FOR UPDATE USING (customer_id = auth.uid());
+CREATE POLICY "Allow customers delete own reviews" ON public.reviews FOR DELETE USING (customer_id = auth.uid());
+
+-- ==========================================
+-- 10. WISHLISTS TABLE
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.wishlists (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+    product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
+    UNIQUE(customer_id, product_id)
+);
+
+ALTER TABLE public.wishlists ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow customers select own wishlist" ON public.wishlists FOR SELECT USING (customer_id = auth.uid());
+CREATE POLICY "Allow customers manage own wishlist" ON public.wishlists FOR ALL USING (customer_id = auth.uid());
+
+-- ==========================================
+-- 11. COUPONS TABLE
+-- ==========================================
+CREATE TABLE IF NOT EXISTS public.coupons (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     vendor_id UUID NOT NULL REFERENCES public.vendors(id) ON DELETE CASCADE,
-    customer_id UUID NOT NULL REFERENCES public.customers(id) ON DELETE CASCADE,
-    offer_id UUID NOT NULL REFERENCES public.offers(id) ON DELETE CASCADE,
-    points_deducted INTEGER NOT NULL CHECK (points_deducted >= 0),
-    status VARCHAR(50) DEFAULT 'pending' NOT NULL, -- 'pending', 'claimed', 'cancelled'
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+    code VARCHAR(50) UNIQUE NOT NULL,
+    discount_percent INTEGER NOT NULL CHECK (discount_percent > 0 AND discount_percent <= 100),
+    active BOOLEAN DEFAULT TRUE NOT NULL,
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL
 );
 
-ALTER TABLE public.prebookings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
 
--- Policies for prebookings
-CREATE POLICY "Anyone can insert prebookings" 
-ON public.prebookings FOR INSERT 
-TO anon, authenticated 
-WITH CHECK (true);
-
-CREATE POLICY "Customers and vendors can view prebookings" 
-ON public.prebookings FOR SELECT 
-TO anon, authenticated 
-USING (true);
-
-CREATE POLICY "Vendors can update prebookings status" 
-ON public.prebookings FOR UPDATE 
-TO authenticated 
-USING (vendor_id = auth.uid())
-WITH CHECK (vendor_id = auth.uid());
-
+CREATE POLICY "Allow public select coupons" ON public.coupons FOR SELECT USING (true);
+CREATE POLICY "Allow vendors manage own coupons" ON public.coupons FOR ALL USING (vendor_id = auth.uid());
 
 -- ==========================================
--- 10. PUBLIC ACCESS POLICIES ON EXISTING TABLES
+-- PERFORMANCE INDEXES
 -- ==========================================
--- Customers need to view their customer record to see points balance and QR tokens
-CREATE POLICY "Allow public lookups of customers by phone" 
-ON public.customers FOR SELECT 
-TO anon, authenticated 
-USING (true);
-
--- Customers need to deduct points when prebooking (updates customer point balance)
-CREATE POLICY "Allow public updates of customer points for prebooking" 
-ON public.customers FOR UPDATE 
-TO anon, authenticated 
-USING (true)
-WITH CHECK (true);
-
--- Customers need to read vendor profile details (store name, etc.)
-CREATE POLICY "Allow public select of vendors" 
-ON public.vendors FOR SELECT 
-TO anon, authenticated 
-USING (true);
-
--- Customers need to insert a transaction to log point deductions
-CREATE POLICY "Allow public insert of transactions" 
-ON public.transactions FOR INSERT 
-TO anon, authenticated 
-WITH CHECK (true);
-
--- Customers need to register/sign up themselves
-CREATE POLICY "Allow public inserts of customers for registration" 
-ON public.customers FOR INSERT 
-TO anon, authenticated 
-WITH CHECK (true);
-
-
--- ==========================================
--- 11. INDEXES
--- ==========================================
-CREATE INDEX IF NOT EXISTS idx_offers_vendor ON public.offers(vendor_id);
-CREATE INDEX IF NOT EXISTS idx_prebookings_vendor ON public.prebookings(vendor_id);
-CREATE INDEX IF NOT EXISTS idx_prebookings_customer ON public.prebookings(customer_id);
-
+CREATE INDEX IF NOT EXISTS idx_products_vendor ON public.products(vendor_id);
+CREATE INDEX IF NOT EXISTS idx_products_category ON public.products(category_id);
+CREATE INDEX IF NOT EXISTS idx_cart_items_cart ON public.cart_items(cart_id);
+CREATE INDEX IF NOT EXISTS idx_orders_customer ON public.orders(customer_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON public.order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_reviews_product ON public.reviews(product_id);
+CREATE INDEX IF NOT EXISTS idx_wishlists_customer ON public.wishlists(customer_id);

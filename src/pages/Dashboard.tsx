@@ -3,374 +3,172 @@ import { useAuth } from "../hooks/use-auth";
 import { useLocation, Link } from "wouter";
 import { supabase } from "../lib/supabase";
 import { useToast } from "@/hooks/use-toast";
-import { useLoyaltyEngine } from "../hooks/use-loyalty-engine";
 import { 
-  LogOut, Store, User, Mail, Phone, Calendar, 
-  TrendingUp, Users, Award, ShieldAlert, Plus,
-  CreditCard, Gift, Clock, Trash2, X, Check,
-  Coins, ArrowRight, Sparkles, ChevronRight, ListCollapse,
-  Loader2, QrCode, ShoppingBag, Tag
+  LogOut, Store, User, Mail, Plus, CreditCard, Clock, 
+  ShoppingBag, Tag, ChevronRight, Loader2, ArrowUpRight, 
+  Package, AlertTriangle, ArrowRight, ShieldAlert
 } from "lucide-react";
 
-interface Customer {
+interface Product {
   id: string;
-  customer_name: string;
-  phone: string;
-  points: number;
-  created_at: string;
+  name: string;
+  price: number;
+  stock_quantity: number;
+  image_url: string | null;
+  category_id: string;
+  categories: { name: string } | null;
 }
 
-interface Transaction {
+interface OrderItem {
   id: string;
-  amount: number;
-  points_earned: number;
-  transaction_date: string;
-  customer_id: string;
-  customers?: {
-    customer_name: string;
+  price: number;
+  quantity: number;
+  order_id: string;
+  orders: {
+    id: string;
+    status: "pending" | "paid" | "shipped" | "delivered" | "cancelled";
+    created_at: string;
+    shipping_address: string;
+    profiles: {
+      name: string;
+      email: string;
+    } | null;
+  } | null;
+  products: {
+    id: string;
+    name: string;
+    image_url: string | null;
   } | null;
 }
 
-interface Reward {
-  id: string;
-  reward_name: string;
-  points_required: number;
-  description: string;
-  created_at: string;
-}
-
 export default function Dashboard() {
-  const { vendor, signOut, refreshProfile } = useAuth();
+  const { vendor, profile, signOut } = useAuth();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const { calculatePoints, logLoyaltyTransaction, updateLoyaltyRules } = useLoyaltyEngine();
 
-  // Dashboard state
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [rewards, setRewards] = useState<Reward[]>([]);
-  const [allCustomers, setAllCustomers] = useState<Customer[]>([]); // For transaction dropdown
+  const [products, setProducts] = useState<Product[]>([]);
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Stats calculation
   const [stats, setStats] = useState({
-    totalCustomers: 0,
-    totalTransactions: 0,
-    pointsIssued: 0,
-    activeRewards: 0,
-    pendingPrebookings: 0
+    totalSales: 0,
+    totalOrders: 0,
+    activeProducts: 0,
+    pendingShipments: 0
   });
 
-  const [dataLoading, setDataLoading] = useState(true);
-
-  // Modal visibility states
-  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
-  const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
-  const [isRewardModalOpen, setIsRewardModalOpen] = useState(false);
-
-  // Form states
-  const [newCustName, setNewCustName] = useState("");
-  const [newCustPhone, setNewCustPhone] = useState("");
-  
-  const [txCustId, setTxCustId] = useState("");
-  const [txAmount, setTxAmount] = useState("");
-  
-  const [newRewardName, setNewRewardName] = useState("");
-  const [newRewardPoints, setNewRewardPoints] = useState("");
-  const [newRewardDesc, setNewRewardDesc] = useState("");
-
-  // Rule settings states
-  const [ruleAmount, setRuleAmount] = useState("100");
-  const [rulePoints, setRulePoints] = useState("10");
-
-  const [actionLoading, setActionLoading] = useState(false);
-
-  // Sync point rules form on vendor load
   useEffect(() => {
     if (vendor) {
-      setRuleAmount(vendor.points_rule_amount?.toString() || "100");
-      setRulePoints(vendor.points_rule_points?.toString() || "10");
+      fetchDashboardData();
     }
   }, [vendor]);
 
-  // Fetch all dashboard data
   async function fetchDashboardData() {
     if (!vendor) return;
-
+    setLoading(true);
     try {
-      // 1. Fetch Customers
-      const { data: custData, error: custError } = await supabase
-        .from("customers")
-        .select("*")
-        .eq("vendor_id", vendor.id)
-        .order("points", { ascending: false });
-
-      if (custError) throw custError;
-
-      // 2. Fetch Transactions (joining customer details)
-      const { data: txData, error: txError } = await supabase
-        .from("transactions")
+      // 1. Fetch Vendor Products
+      const { data: prodData, error: prodError } = await supabase
+        .from("products")
         .select(`
           id,
-          amount,
-          points_earned,
-          transaction_date,
-          customer_id,
-          customers (
-            customer_name
-          )
+          name,
+          price,
+          stock_quantity,
+          image_url,
+          category_id,
+          categories ( name )
         `)
         .eq("vendor_id", vendor.id)
-        .order("transaction_date", { ascending: false });
+        .order("created_at", { ascending: false });
 
-      if (txError) throw txError;
+      if (prodError) throw prodError;
 
-      // 3. Fetch Rewards
-      const { data: rwData, error: rwError } = await supabase
-        .from("rewards")
-        .select("*")
-        .eq("vendor_id", vendor.id)
-        .order("points_required", { ascending: true });
+      const formattedProducts = (prodData || []).map((p: any) => ({
+        ...p,
+        categories: Array.isArray(p.categories) ? p.categories[0] : p.categories
+      })) as Product[];
 
-      if (rwError) throw rwError;
+      setProducts(formattedProducts);
 
-      // Map local states
-      const loadedCustomers = custData || [];
-      const loadedTransactions = (txData || []).map(tx => ({
-        ...tx,
-        customers: Array.isArray(tx.customers) ? tx.customers[0] : tx.customers
-      })) as Transaction[];
-      const loadedRewards = rwData || [];
+      // 2. Fetch Order Items for this vendor
+      const { data: itemsData, error: itemsError } = await supabase
+        .from("order_items")
+        .select(`
+          id,
+          price,
+          quantity,
+          order_id,
+          orders (
+            id,
+            status,
+            created_at,
+            shipping_address,
+            profiles (
+              name,
+              email
+            )
+          ),
+          products (
+            id,
+            name,
+            image_url
+          )
+        `)
+        .eq("vendor_id", vendor.id);
 
-      setCustomers(loadedCustomers.slice(0, 5)); // Top 5
-      setAllCustomers(loadedCustomers); // For transaction selector
-      setTransactions(loadedTransactions.slice(0, 5)); // Recent 5
-      setRewards(loadedRewards);
+      if (itemsError) throw itemsError;
 
-      // Aggregates
-      const totalPoints = loadedTransactions.reduce((sum, tx) => sum + tx.points_earned, 0);
+      const formattedItems = (itemsData || []).map((item: any) => ({
+        ...item,
+        orders: Array.isArray(item.orders) ? item.orders[0] : item.orders,
+        products: Array.isArray(item.products) ? item.products[0] : item.products
+      })).filter((item: any) => item.orders !== null) as OrderItem[];
 
-      // 4. Fetch Pending Prebookings count
-      const { count: prebookCount, error: prebookError } = await supabase
-        .from("prebookings")
-        .select("*", { count: "exact", head: true })
-        .eq("vendor_id", vendor.id)
-        .eq("status", "pending");
+      // Sort order items by order date descending
+      formattedItems.sort((a, b) => {
+        const dateA = new Date(a.orders?.created_at || 0).getTime();
+        const dateB = new Date(b.orders?.created_at || 0).getTime();
+        return dateB - dateA;
+      });
 
-      if (prebookError) throw prebookError;
+      setOrderItems(formattedItems);
+
+      // 3. Compute Metrics
+      let salesSum = 0;
+      const uniqueOrderIds = new Set<string>();
+      let pendingCount = 0;
+
+      formattedItems.forEach(item => {
+        if (item.orders) {
+          const status = item.orders.status;
+          if (status !== "cancelled") {
+            salesSum += Number(item.price) * item.quantity;
+          }
+          uniqueOrderIds.add(item.order_id);
+          if (status === "pending" || status === "paid") {
+            pendingCount += 1;
+          }
+        }
+      });
 
       setStats({
-        totalCustomers: loadedCustomers.length,
-        totalTransactions: loadedTransactions.length,
-        pointsIssued: totalPoints,
-        activeRewards: loadedRewards.length,
-        pendingPrebookings: prebookCount || 0
+        totalSales: salesSum,
+        totalOrders: uniqueOrderIds.size,
+        activeProducts: formattedProducts.length,
+        pendingShipments: pendingCount
       });
 
     } catch (err: any) {
-      console.error("Error fetching dashboard data:", err);
+      console.error("Error loading vendor dashboard:", err);
       toast({
         variant: "destructive",
-        title: "Fetch Error",
-        description: err.message || "Could not retrieve real-time dashboard data."
+        title: "Load Error",
+        description: err.message || "Failed to load seller metrics."
       });
     } finally {
-      setDataLoading(false);
-    }
-  }
-
-  // Real-time integration
-  useEffect(() => {
-    if (!vendor) return;
-
-    fetchDashboardData();
-
-    // Subscribe to modifications on tables
-    const channel = supabase
-      .channel("realtime-vendor-dashboard")
-      .on("postgres_changes", { event: "*", schema: "public", table: "customers" }, () => {
-        fetchDashboardData();
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () => {
-        fetchDashboardData();
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "rewards" }, () => {
-        fetchDashboardData();
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "prebookings" }, () => {
-        fetchDashboardData();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [vendor]);
-
-  // Mutations
-  async function handleAddCustomer(e: React.FormEvent) {
-    e.preventDefault();
-    if (!vendor) return;
-    setActionLoading(true);
-
-    try {
-      const { error } = await supabase
-        .from("customers")
-        .insert([{
-          vendor_id: vendor.id,
-          customer_name: newCustName.trim(),
-          phone: newCustPhone.trim(),
-          points: 0
-        }]);
-
-      if (error) throw error;
-
-      toast({
-        title: "Customer Added",
-        description: `${newCustName} has been successfully added to your CRM.`,
-      });
-
-      setIsCustomerModalOpen(false);
-      setNewCustName("");
-      setNewCustPhone("");
-      fetchDashboardData();
-
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Action Failed",
-        description: err.message || "Failed to add customer.",
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
-  async function handleLogTransaction(e: React.FormEvent) {
-    e.preventDefault();
-    if (!vendor) return;
-    setActionLoading(true);
-
-    const amount = parseFloat(txAmount);
-
-    try {
-      // Calculate and submit transaction dynamically using custom point rules
-      const pointsEarned = await logLoyaltyTransaction(
-        vendor.id,
-        txCustId,
-        amount,
-        vendor.points_rule_amount,
-        vendor.points_rule_points
-      );
-
-      toast({
-        title: "Transaction Logged",
-        description: `Logged ₹${amount} transaction. Customer earned ${pointsEarned} loyalty points!`,
-      });
-
-      setIsTransactionModalOpen(false);
-      setTxCustId("");
-      setTxAmount("");
-      fetchDashboardData();
-
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Transaction Failed",
-        description: err.message || "Failed to process transaction.",
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
-  async function handleUpdateRules(e: React.FormEvent) {
-    e.preventDefault();
-    if (!vendor) return;
-    setActionLoading(true);
-
-    try {
-      const amountVal = parseFloat(ruleAmount);
-      const pointsVal = parseInt(rulePoints);
-
-      await updateLoyaltyRules(vendor.id, amountVal, pointsVal);
-      await refreshProfile(); // Refresh global auth vendor profile cache
-
-      toast({
-        title: "Loyalty Point Rules Saved",
-        description: `Loyalty rule updated to: ₹${amountVal} spent = ${pointsVal} points.`,
-      });
-
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Update Failed",
-        description: err.message || "Failed to update loyalty rules.",
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
-  async function handleAddReward(e: React.FormEvent) {
-    e.preventDefault();
-    if (!vendor) return;
-    setActionLoading(true);
-
-    try {
-      const { error } = await supabase
-        .from("rewards")
-        .insert([{
-          vendor_id: vendor.id,
-          reward_name: newRewardName.trim(),
-          points_required: parseInt(newRewardPoints),
-          description: newRewardDesc.trim()
-        }]);
-
-      if (error) throw error;
-
-      toast({
-        title: "Reward Created",
-        description: `Reward tier "${newRewardName}" has been successfully added.`,
-      });
-
-      setIsRewardModalOpen(false);
-      setNewRewardName("");
-      setNewRewardPoints("");
-      setNewRewardDesc("");
-      fetchDashboardData();
-
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Action Failed",
-        description: err.message || "Failed to create reward tier.",
-      });
-    } finally {
-      setActionLoading(false);
-    }
-  }
-
-  async function handleDeleteReward(rewardId: string) {
-    if (!confirm("Are you sure you want to delete this reward tier?")) return;
-
-    try {
-      const { error } = await supabase
-        .from("rewards")
-        .delete()
-        .eq("id", rewardId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Reward Deleted",
-        description: "The reward tier has been deleted.",
-      });
-
-      fetchDashboardData();
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Delete Failed",
-        description: err.message || "Could not delete reward.",
-      });
+      setLoading(false);
     }
   }
 
@@ -383,19 +181,19 @@ export default function Dashboard() {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center text-white px-4">
         <div className="glass-panel p-8 rounded-2xl max-w-md w-full text-center border-red-500/20">
-          <ShieldAlert className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold mb-2">Access Error</h2>
-          <p className="text-muted mb-6">No vendor profile was found in the database. Please register first.</p>
+          <ShieldAlert className="w-16 h-16 text-red-500 mx-auto mb-4 animate-bounce" />
+          <h2 className="text-2xl font-bold mb-2">Access Denied</h2>
+          <p className="text-muted mb-6">No seller storefront profiles were located for your account.</p>
           <div className="flex gap-4 justify-center">
             <button 
               onClick={() => setLocation("/register")}
-              className="bg-primary text-primary-foreground px-6 py-2.5 rounded-full font-bold hover:bg-gold/90 transition-colors"
+              className="bg-primary text-primary-foreground px-6 py-2.5 rounded-full font-bold hover:bg-gold/90 transition-colors cursor-pointer"
             >
-              Go to Register
+              Register Storefront
             </button>
             <button 
               onClick={handleSignOut}
-              className="border border-white/20 px-6 py-2.5 rounded-full font-bold hover:bg-white/10 transition-colors"
+              className="border border-white/20 px-6 py-2.5 rounded-full font-bold hover:bg-white/10 transition-colors cursor-pointer"
             >
               Sign Out
             </button>
@@ -405,53 +203,36 @@ export default function Dashboard() {
     );
   }
 
+  // Get recent 5 order items
+  const recentOrderItems = orderItems.slice(0, 5);
+
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans pb-16">
+    <div className="min-h-screen bg-background text-foreground font-sans pb-16 relative overflow-hidden">
+      {/* Background glow */}
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue/10 rounded-full blur-3xl pointer-events-none"></div>
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-gold/10 rounded-full blur-3xl pointer-events-none"></div>
+
       {/* NAVBAR */}
       <nav className="fixed top-0 left-0 right-0 z-40 glass-panel border-x-0 border-t-0 px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-6">
-          <div className="text-gold font-bold text-2xl flex items-center">
+          <Link href="/" className="font-bold text-2xl flex items-center cursor-pointer">
             <span className="text-white">Vend</span><span className="text-gold">ly</span>
-          </div>
+            <span className="ml-2 text-xs font-semibold uppercase tracking-wider bg-gold/15 text-gold px-2.5 py-0.5 rounded-full">
+              Seller
+            </span>
+          </Link>
           
-          <div className="hidden sm:flex items-center gap-6 text-sm font-medium">
-            <Link 
-              href="/dashboard" 
-              className="text-white border-b-2 border-gold pb-1 pt-1 font-bold"
-            >
-              Overview
-            </Link>
-            <Link 
-              href="/customers" 
-              className="text-muted hover:text-white transition-colors"
-            >
-              Customers
-            </Link>
-            <Link
-              href="/rewards"
-              className="text-muted hover:text-white transition-colors"
-            >
-              Rewards
-            </Link>
-            <Link
-              href="/offers"
-              className="text-muted hover:text-white transition-colors"
-            >
-              Offers
-            </Link>
-            <Link
-              href="/prebookings"
-              className="text-muted hover:text-white transition-colors"
-            >
-              Prebookings
-            </Link>
+          <div className="hidden sm:flex items-center gap-6 text-sm font-medium text-muted">
+            <span className="text-white border-b-2 border-gold pb-1 pt-1 font-bold">Overview</span>
+            <Link href="/offers" className="hover:text-white transition-colors">Catalog Manager</Link>
+            <Link href="/prebookings" className="hover:text-white transition-colors">Fulfill Orders</Link>
           </div>
         </div>
         
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex flex-col text-right">
-            <span className="text-sm font-semibold text-white">{vendor.business}</span>
-            <span className="text-xs text-muted-foreground">{vendor.name}</span>
+            <span className="text-sm font-semibold text-white">{vendor.business_name}</span>
+            <span className="text-xs text-muted-foreground">Store Owner</span>
           </div>
           <button 
             onClick={handleSignOut}
@@ -464,80 +245,46 @@ export default function Dashboard() {
       </nav>
 
       {/* DASHBOARD BODY */}
-      <main className="max-w-6xl mx-auto px-6 pt-28">
+      <main className="max-w-6xl mx-auto px-6 pt-28 relative z-10">
         
-        {/* Welcome & Quick Actions */}
+        {/* Welcome Banner */}
         <div className="glass-panel rounded-3xl p-8 mb-8 bg-gradient-to-r from-blue/10 to-gold/10 relative overflow-hidden border border-white/10 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          <div className="absolute top-0 right-0 w-80 h-80 bg-gold/5 rounded-full blur-3xl pointer-events-none"></div>
-          
           <div>
-            <span className="text-gold font-bold text-xs uppercase tracking-wider block mb-1">Overview Dashboard</span>
+            <span className="text-gold font-bold text-xs uppercase tracking-wider block mb-1">Seller Dashboard Overview</span>
             <h1 className="text-3xl font-extrabold text-white mb-2">
-              {vendor.business}
+              {vendor.business_name}
             </h1>
             <p className="text-muted text-sm max-w-lg">
-              Manage loyalty programs, track transactional rewards, and view customer profiles in real-time.
+              Manage your product catalog, check real-time sales revenue, and fulfill pending customer shipments.
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-3 z-10">
-            <button 
-              onClick={() => setIsCustomerModalOpen(true)}
-              className="bg-white/5 border border-white/10 hover:border-gold hover:text-gold px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-gold/5 transition-all cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              Add Customer
-            </button>
-            <button 
-              onClick={() => setIsTransactionModalOpen(true)}
-              className="bg-primary text-primary-foreground hover:bg-gold/90 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all cursor-pointer gold-glow animate-pulse"
-            >
-              <CreditCard className="w-4 h-4" />
-              Log Transaction
-            </button>
-            <button 
-              onClick={() => setIsRewardModalOpen(true)}
-              className="bg-white/5 border border-white/10 hover:border-blue hover:text-blue px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-blue/5 transition-all cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              Add Reward
-            </button>
-            <Link
-              href="/qr-scanner"
-              className="bg-white/5 border border-white/10 hover:border-emerald hover:text-emerald px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-emerald/5 transition-all cursor-pointer"
-            >
-              <QrCode className="w-4 h-4" />
-              Scan QR
+          <div className="flex flex-wrap gap-3">
+            <Link href="/offers">
+              <button className="bg-white/5 border border-white/10 hover:border-gold hover:text-gold px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-gold/5 transition-all cursor-pointer">
+                <Plus className="w-4 h-4" />
+                Add Product
+              </button>
             </Link>
-            <Link
-              href="/offers"
-              className="bg-white/5 border border-white/10 hover:border-purple-400 hover:text-purple-400 px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-purple-400/5 transition-all cursor-pointer"
-            >
-              <Tag className="w-4 h-4" />
-              Manage Offers
-            </Link>
-            <Link
-              href="/prebookings"
-              className="bg-white/5 border border-white/10 hover:border-blue hover:text-blue px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 hover:bg-blue/5 transition-all cursor-pointer"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              Prebookings
+            <Link href="/prebookings">
+              <button className="bg-primary text-primary-foreground hover:bg-gold/90 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all cursor-pointer gold-glow">
+                <ShoppingBag className="w-4 h-4" />
+                Ship Pending Orders
+              </button>
             </Link>
           </div>
         </div>
 
         {/* METRICS CARDS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
           {[
-            { label: "Total Customers", val: stats.totalCustomers, icon: <Users className="w-6 h-6 text-gold" />, color: "border-gold/20" },
-            { label: "Total Transactions", val: stats.totalTransactions, icon: <CreditCard className="w-6 h-6 text-blue" />, color: "border-blue/20" },
-            { label: "Loyalty Points Issued", val: stats.pointsIssued, icon: <Coins className="w-6 h-6 text-emerald" />, color: "border-emerald/20" },
-            { label: "Active Rewards", val: stats.activeRewards, icon: <Gift className="w-6 h-6 text-purple-400" />, color: "border-purple-400/20" },
-            { label: "Pending Prebookings", val: stats.pendingPrebookings, icon: <ShoppingBag className="w-6 h-6 text-pink-400" />, color: "border-pink-400/20" }
+            { label: "Total Sales Revenue", val: `₹${stats.totalSales.toFixed(2)}`, icon: <CreditCard className="w-6 h-6 text-emerald" />, desc: "Gross storefront sales" },
+            { label: "Orders Received", val: stats.totalOrders, icon: <ShoppingBag className="w-6 h-6 text-blue" />, desc: "Unique checked out orders" },
+            { label: "Catalog Products", val: stats.activeProducts, icon: <Package className="w-6 h-6 text-gold" />, desc: "Live products in shop" },
+            { label: "Pending Shipments", val: stats.pendingShipments, icon: <Clock className="w-6 h-6 text-pink-400" />, desc: "Orders requiring shipping" }
           ].map((stat, i) => (
-            <div key={i} className={`glass-panel p-6 rounded-2xl flex flex-col justify-between hover:scale-[1.01] transition-transform duration-300 border ${stat.color}`}>
-              {dataLoading ? (
-                // SKELETON METRIC
+            <div key={i} className="glass-panel p-6 rounded-2xl flex flex-col justify-between hover:scale-[1.01] transition-transform duration-300 border border-white/5">
+              {loading ? (
                 <div className="animate-pulse space-y-4 w-full">
                   <div className="flex justify-between items-center">
                     <div className="h-4 bg-white/10 rounded w-24"></div>
@@ -548,12 +295,12 @@ export default function Dashboard() {
               ) : (
                 <>
                   <div className="flex justify-between items-start mb-4">
-                    <div className="text-sm font-bold text-muted-foreground uppercase tracking-wider">{stat.label}</div>
+                    <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{stat.label}</div>
                     <div className="p-2.5 rounded-xl bg-white/5">{stat.icon}</div>
                   </div>
                   <div>
-                    <div className="text-3xl font-extrabold text-white mb-0.5">{stat.val}</div>
-                    <div className="text-xs text-muted-foreground">Aggregated Real-time</div>
+                    <div className="text-2xl font-black text-white mb-0.5">{stat.val}</div>
+                    <div className="text-[10px] text-muted-foreground">{stat.desc}</div>
                   </div>
                 </>
               )}
@@ -564,80 +311,70 @@ export default function Dashboard() {
         {/* MAIN BODY SECTIONS */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* SECTION: RECENT TRANSACTIONS */}
+          {/* SECTION: RECENT CUSTOMER ORDERS */}
           <div className="lg:col-span-2 glass-panel p-6 md:p-8 rounded-3xl border border-white/10 flex flex-col">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2">
                 <Clock className="w-5 h-5 text-gold" />
-                Recent Transactions
+                Recent Shop Orders
               </h2>
-              {!dataLoading && transactions.length > 0 && (
-                <span className="text-xs text-muted font-medium bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
-                  Latest 5
-                </span>
-              )}
+              <Link href="/prebookings" className="text-xs text-gold font-bold hover:underline flex items-center gap-1 cursor-pointer">
+                View All <ArrowUpRight className="w-3.5 h-3.5" />
+              </Link>
             </div>
 
-            {dataLoading ? (
-              // SKELETON TABLE
+            {loading ? (
               <div className="animate-pulse space-y-4 w-full">
-                {[1, 2, 3, 4].map(s => (
+                {[1, 2, 3].map(s => (
                   <div key={s} className="flex justify-between items-center py-3 border-b border-white/5">
-                    <div className="space-y-2">
-                      <div className="h-4 bg-white/10 rounded w-28"></div>
-                      <div className="h-3 bg-white/10 rounded w-20"></div>
-                    </div>
-                    <div className="h-6 bg-white/10 rounded w-16"></div>
+                    <div className="h-4 bg-white/10 rounded w-28"></div>
+                    <div className="h-4 bg-white/10 rounded w-16"></div>
                   </div>
                 ))}
               </div>
-            ) : transactions.length === 0 ? (
-              // EMPTY STATE
+            ) : recentOrderItems.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
                 <div className="p-4 bg-white/5 border border-white/10 rounded-full mb-4">
-                  <CreditCard className="w-8 h-8 text-muted-foreground" />
+                  <ShoppingBag className="w-8 h-8 text-muted-foreground" />
                 </div>
-                <h3 className="font-bold text-lg text-white mb-1">No Transactions Yet</h3>
-                <p className="text-muted text-sm max-w-sm mb-6">
-                  Log transactions for your customers to award loyalty points and record sales.
+                <h3 className="font-bold text-base text-white mb-1">No Orders Found</h3>
+                <p className="text-muted text-xs max-w-sm mb-6">
+                  When customers purchase your products online, they will appear here for packaging and shipping.
                 </p>
-                <button
-                  onClick={() => setIsTransactionModalOpen(true)}
-                  className="bg-primary text-primary-foreground hover:bg-gold/90 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  Log First Transaction
-                </button>
               </div>
             ) : (
-              // LIST
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
+                <table className="w-full text-left text-xs">
                   <thead>
-                    <tr className="border-b border-white/10 text-muted-foreground text-xs uppercase tracking-wider pb-3">
-                      <th className="pb-3 font-semibold">Customer</th>
-                      <th className="pb-3 font-semibold">Date</th>
-                      <th className="pb-3 font-semibold text-right">Amount</th>
-                      <th className="pb-3 font-semibold text-right text-gold">Points</th>
+                    <tr className="border-b border-white/10 text-muted-foreground uppercase tracking-wider pb-3 font-bold text-[10px]">
+                      <th className="pb-3">Product</th>
+                      <th className="pb-3">Buyer</th>
+                      <th className="pb-3 text-right">Qty</th>
+                      <th className="pb-3 text-right">Earnings</th>
+                      <th className="pb-3 text-right">Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {transactions.map((tx) => (
-                      <tr key={tx.id} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
-                        <td className="py-4 font-semibold text-white flex items-center gap-2">
-                          <User className="w-4 h-4 text-muted-foreground" />
-                          {tx.customers?.customer_name || "Unknown Customer"}
+                    {recentOrderItems.map((item) => (
+                      <tr key={item.id} className="border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
+                        <td className="py-4 font-bold text-white max-w-[150px] truncate">
+                          {item.products?.name || "Deleted Product"}
                         </td>
                         <td className="py-4 text-muted-foreground">
-                          {new Date(tx.transaction_date).toLocaleDateString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit"
-                          })}
+                          {item.orders?.profiles?.name || "Customer"}
                         </td>
-                        <td className="py-4 text-right font-bold text-white">₹{tx.amount.toFixed(2)}</td>
-                        <td className="py-4 text-right font-bold text-gold">+{tx.points_earned}</td>
+                        <td className="py-4 text-right font-semibold text-white">{item.quantity}</td>
+                        <td className="py-4 text-right font-bold text-emerald">₹{(Number(item.price) * item.quantity).toFixed(2)}</td>
+                        <td className="py-4 text-right">
+                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider
+                            ${item.orders?.status === "delivered" ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : ""}
+                            ${item.orders?.status === "shipped" ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" : ""}
+                            ${item.orders?.status === "pending" || item.orders?.status === "paid" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : ""}
+                            ${item.orders?.status === "cancelled" ? "bg-red-500/10 text-red-400 border border-red-500/20" : ""}
+                          `}>
+                            {item.orders?.status}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -646,467 +383,88 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* SECTION: TOP CUSTOMERS */}
-          <div className="lg:col-span-1 glass-panel p-6 md:p-8 rounded-3xl border border-white/10 flex flex-col">
-            <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-              <Award className="w-5 h-5 text-gold" />
-              Top Customers
-            </h2>
-
-            {dataLoading ? (
-              // SKELETON LIST
-              <div className="animate-pulse space-y-4 w-full">
-                {[1, 2, 3].map(s => (
-                  <div key={s} className="flex justify-between items-center py-3 border-b border-white/5">
-                    <div className="space-y-2">
-                      <div className="h-4 bg-white/10 rounded w-24"></div>
-                      <div className="h-3 bg-white/10 rounded w-16"></div>
-                    </div>
-                    <div className="h-5 bg-white/10 rounded w-10"></div>
-                  </div>
-                ))}
-              </div>
-            ) : customers.length === 0 ? (
-              // EMPTY STATE
-              <div className="flex-1 flex flex-col items-center justify-center py-12 text-center">
-                <div className="p-4 bg-white/5 border border-white/10 rounded-full mb-4">
-                  <Users className="w-8 h-8 text-muted-foreground" />
-                </div>
-                <h3 className="font-bold text-lg text-white mb-1">No Customers</h3>
-                <p className="text-muted text-sm max-w-xs mb-6">
-                  Add customers to your dashboard to start tracking points and udhaar details.
-                </p>
-                <button
-                  onClick={() => setIsCustomerModalOpen(true)}
-                  className="bg-white/5 border border-white/15 hover:border-gold hover:text-gold px-4 py-2.5 rounded-xl text-sm font-semibold transition-all cursor-pointer"
-                >
-                  Create Customer
-                </button>
-              </div>
-            ) : (
-              // LIST
-              <div className="space-y-4 flex-1">
-                {customers.map((cust, idx) => (
-                  <div key={cust.id} className="flex items-center justify-between p-4 rounded-xl hover:bg-white/5 transition-colors border border-white/5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gold/10 border border-gold/30 flex items-center justify-center font-bold text-gold text-xs">
-                        #{idx + 1}
-                      </div>
-                      <div>
-                        <div className="font-bold text-white text-sm">{cust.customer_name}</div>
-                        <div className="text-xs text-muted-foreground">{cust.phone}</div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm font-bold text-gold flex items-center gap-1">
-                        <Coins className="w-3.5 h-3.5" />
-                        {cust.points}
-                      </div>
-                      <div className="text-[10px] text-muted-foreground uppercase font-semibold">Points</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* SECTION: LOYALTY POINTS ENGINE CONFIG */}
-          <div className="lg:col-span-1 glass-panel p-6 md:p-8 rounded-3xl border border-white/10 flex flex-col">
-            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <Coins className="w-5 h-5 text-gold" />
-              Loyalty Point Rules
-            </h2>
-            <p className="text-muted text-xs mb-6">
-              Customize how customers earn loyalty points at your store. Points are calculated automatically.
-            </p>
-
-            <form onSubmit={handleUpdateRules} className="space-y-4 flex-1 flex flex-col justify-between">
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase block">Amount Spent (₹)</label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    value={ruleAmount}
-                    onChange={(e) => setRuleAmount(e.target.value)}
-                    className="block w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 text-sm"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase block">Points Awarded</label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    value={rulePoints}
-                    onChange={(e) => setRulePoints(e.target.value)}
-                    className="block w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 text-sm"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-6 pt-4 border-t border-white/5 space-y-4">
-                <div className="text-xs text-gold font-semibold flex items-center gap-1.5 bg-gold/5 p-2.5 rounded-xl border border-gold/15">
-                  <Sparkles className="w-4 h-4 flex-shrink-0" />
-                  <span>Rule: ₹{vendor.points_rule_amount} spent = {vendor.points_rule_points} points</span>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={actionLoading}
-                  className="w-full bg-primary text-primary-foreground py-2.5 rounded-xl font-bold hover:bg-gold/90 transition-all cursor-pointer text-sm gold-glow flex items-center justify-center gap-2"
-                >
-                  {actionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Point Rules"}
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* SECTION: MERCHANT PROFILE DETAILS */}
-          <div className="lg:col-span-2 glass-panel p-6 md:p-8 rounded-3xl border border-white/10 flex flex-col justify-between">
+          {/* SECTION: PRODUCT CATALOG PREVIEW */}
+          <div className="lg:col-span-1 glass-panel p-6 md:p-8 rounded-3xl border border-white/10 flex flex-col justify-between">
             <div>
-              <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                <Store className="w-5 h-5 text-gold" />
-                Business Profile
-              </h2>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1 uppercase tracking-wider font-semibold">Store / Business Name</label>
-                  <div className="text-white font-bold text-lg flex items-center gap-2">
-                    <Store className="w-4 h-4 text-muted-foreground" />
-                    {vendor.business}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1 uppercase tracking-wider font-semibold">Merchant / Owner Name</label>
-                  <div className="text-white font-medium flex items-center gap-2">
-                    <User className="w-4 h-4 text-muted-foreground" />
-                    {vendor.name}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1 uppercase tracking-wider font-semibold">Email Address</label>
-                  <div className="text-white font-medium flex items-center gap-2 break-all">
-                    <Mail className="w-4 h-4 text-muted-foreground" />
-                    {vendor.email}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1 uppercase tracking-wider font-semibold">Phone Number</label>
-                  <div className="text-white font-medium flex items-center gap-2">
-                    <Phone className="w-4 h-4 text-muted-foreground" />
-                    {vendor.phone || "Not provided"}
-                  </div>
-                </div>
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Package className="w-5 h-5 text-gold" />
+                  Store Inventory
+                </h2>
+                <Link href="/offers" className="text-xs text-gold font-bold hover:underline cursor-pointer">
+                  Manage
+                </Link>
               </div>
-            </div>
 
-            <div className="mt-8 pt-6 border-t border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1.5">
-                <Calendar className="w-4 h-4" />
-                <span>Registered: {new Date(vendor.created_at).toLocaleDateString()}</span>
-              </div>
-              <div>Merchant ID: {vendor.id}</div>
-            </div>
-          </div>
-
-          {/* SECTION: REWARD PERFORMANCE */}
-          <div className="lg:col-span-3 glass-panel p-6 md:p-8 rounded-3xl border border-white/10">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                <Gift className="w-5 h-5 text-gold" />
-                Reward Tiers & Catalog
-              </h2>
-              <button 
-                onClick={() => setIsRewardModalOpen(true)}
-                className="text-xs text-gold font-bold hover:underline flex items-center gap-1 cursor-pointer"
-              >
-                Create Reward Tier <ChevronRight className="w-3 h-3" />
-              </button>
-            </div>
-
-            {dataLoading ? (
-              // SKELETON
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {[1, 2, 3].map(s => (
-                  <div key={s} className="animate-pulse glass-panel p-6 rounded-2xl space-y-4">
-                    <div className="h-6 bg-white/10 rounded w-28"></div>
-                    <div className="h-4 bg-white/10 rounded w-16"></div>
-                    <div className="h-10 bg-white/10 rounded w-full"></div>
-                  </div>
-                ))}
-              </div>
-            ) : rewards.length === 0 ? (
-              // EMPTY STATE
-              <div className="flex flex-col items-center justify-center py-12 text-center max-w-md mx-auto">
-                <div className="p-4 bg-white/5 border border-white/10 rounded-full mb-4">
-                  <Gift className="w-8 h-8 text-muted-foreground" />
+              {loading ? (
+                <div className="animate-pulse space-y-4 w-full">
+                  {[1, 2, 3].map(s => (
+                    <div key={s} className="h-10 bg-white/10 rounded w-full"></div>
+                  ))}
                 </div>
-                <h3 className="font-bold text-lg text-white mb-1">No Reward Tiers Defined</h3>
-                <p className="text-muted text-sm mb-6">
-                  Set rewards to incentivize repeat customer checkouts (e.g. Free Chai, 10% Off Grocery).
-                </p>
-                <button
-                  onClick={() => setIsRewardModalOpen(true)}
-                  className="bg-primary text-primary-foreground hover:bg-gold/90 px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  Define First Reward
-                </button>
-              </div>
-            ) : (
-              // LIST
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {rewards.map((rw) => (
-                  <div key={rw.id} className="glass-panel p-6 rounded-2xl border border-white/5 flex flex-col justify-between hover:scale-[1.01] transition-transform">
-                    <div>
-                      <div className="flex justify-between items-start mb-2">
-                        <h3 className="font-bold text-white text-lg">{rw.reward_name}</h3>
-                        <button 
-                          onClick={() => handleDeleteReward(rw.id)}
-                          className="text-muted-foreground hover:text-red-400 p-1 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                      <p className="text-muted text-xs mb-4 min-h-[32px]">{rw.description || "No description provided."}</p>
-                    </div>
+              ) : products.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <Package className="w-10 h-10 text-muted-foreground opacity-50 mb-3" />
+                  <p className="text-xs text-muted">No products listed yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-3.5">
+                  {products.slice(0, 5).map((prod) => {
+                    const isLow = prod.stock_quantity > 0 && prod.stock_quantity <= 10;
+                    const isOut = prod.stock_quantity === 0;
                     
-                    <div className="pt-4 border-t border-white/5 flex justify-between items-center">
-                      <span className="text-xs text-muted-foreground">Requirements</span>
-                      <span className="bg-gold/10 text-gold text-xs font-bold px-3 py-1 rounded-full border border-gold/20 flex items-center gap-1.5">
-                        <Coins className="w-3.5 h-3.5" />
-                        {rw.points_required} Points
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                    return (
+                      <div key={prod.id} className="flex items-center justify-between p-3 rounded-xl hover:bg-white/5 transition-colors border border-white/5">
+                        <div className="min-w-0 flex-1 pr-2">
+                          <div className="font-bold text-white text-xs truncate">{prod.name}</div>
+                          <div className="text-[10px] text-muted-foreground">Category: {prod.categories?.name || "None"}</div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <div className="text-xs font-black text-emerald">₹{prod.price}</div>
+                          <div className="flex items-center gap-1 justify-end mt-0.5">
+                            {isOut ? (
+                              <span className="text-[9px] font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded">Sold Out</span>
+                            ) : isLow ? (
+                              <span className="text-[9px] font-bold text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                <AlertTriangle className="w-2.5 h-2.5" />
+                                {prod.stock_quantity} Left
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">{prod.stock_quantity} Stock</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <Link href="/offers" className="mt-6 pt-4 border-t border-white/5">
+              <button className="w-full bg-white/5 hover:bg-white/10 text-white border border-white/10 hover:border-white/20 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer">
+                Manage Full Catalog
+                <ArrowRight className="w-4 h-4 text-gold" />
+              </button>
+            </Link>
           </div>
-          
+
         </div>
+
+        {/* PROFILE INFORMATION FOOTER */}
+        <div className="glass-panel p-6 rounded-3xl border border-white/10 mt-8 bg-white/[0.01]">
+          <h3 className="text-sm font-bold text-white mb-4">Vendor Support</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-muted-foreground">
+            <div>
+              <p>For inventory assistance, storefront customizations, or payouts contact Vendly Platform Support.</p>
+            </div>
+            <div className="flex flex-col md:items-end justify-center">
+              <span>Merchant Registered Email: <strong className="text-white">{vendor.phone ? `${vendor.phone} (${vendor.address || ""})` : profile?.email}</strong></span>
+            </div>
+          </div>
+        </div>
+
       </main>
-
-      {/* ========================================================
-          MODAL 1: ADD CUSTOMER
-          ======================================================== */}
-      {isCustomerModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md glass-panel rounded-3xl p-8 border border-white/10 shadow-2xl relative animate-fade-in">
-            <button 
-              onClick={() => setIsCustomerModalOpen(false)}
-              className="absolute top-4 right-4 text-muted-foreground hover:text-white p-1 cursor-pointer"
-            >
-              <X className="w-6 h-6" />
-            </button>
-
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
-                <Users className="w-6 h-6 text-gold" />
-                Add Customer
-              </h2>
-              <p className="text-muted text-xs">Create a new customer profile in your CRM database.</p>
-            </div>
-
-            <form onSubmit={handleAddCustomer} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase block">Customer Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Ramesh Sharma"
-                  value={newCustName}
-                  onChange={(e) => setNewCustName(e.target.value)}
-                  className="block w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 text-sm"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase block">Phone Number</label>
-                <input
-                  type="tel"
-                  required
-                  placeholder="e.g. +91 9876543210"
-                  value={newCustPhone}
-                  onChange={(e) => setNewCustPhone(e.target.value)}
-                  className="block w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 text-sm"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={actionLoading}
-                className="w-full mt-4 bg-primary text-primary-foreground py-3 rounded-xl font-bold hover:bg-gold/90 transition-all flex items-center justify-center gap-2 cursor-pointer text-sm gold-glow"
-              >
-                {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Save Customer"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================
-          MODAL 2: LOG TRANSACTION
-          ======================================================== */}
-      {isTransactionModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md glass-panel rounded-3xl p-8 border border-white/10 shadow-2xl relative animate-fade-in">
-            <button 
-              onClick={() => setIsTransactionModalOpen(false)}
-              className="absolute top-4 right-4 text-muted-foreground hover:text-white p-1 cursor-pointer"
-            >
-              <X className="w-6 h-6" />
-            </button>
-
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
-                <CreditCard className="w-6 h-6 text-gold" />
-                Log Transaction
-              </h2>
-              <p className="text-muted text-xs">Record customer purchase amount and award loyalty points.</p>
-            </div>
-
-            {allCustomers.length === 0 ? (
-              <div className="text-center py-6">
-                <p className="text-muted text-sm mb-4">You need to add a customer profile first.</p>
-                <button
-                  onClick={() => {
-                    setIsTransactionModalOpen(false);
-                    setIsCustomerModalOpen(true);
-                  }}
-                  className="bg-primary text-primary-foreground px-5 py-2.5 rounded-xl font-bold text-sm cursor-pointer"
-                >
-                  Create Customer
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleLogTransaction} className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase block">Select Customer</label>
-                  <select
-                    required
-                    value={txCustId}
-                    onChange={(e) => setTxCustId(e.target.value)}
-                    className="block w-full px-4 py-3 bg-card border border-white/10 rounded-xl text-white focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 text-sm"
-                  >
-                    <option value="" disabled>-- Choose a customer --</option>
-                    {allCustomers.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.customer_name} ({c.phone})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase block">Transaction Amount (₹)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    min="1"
-                    placeholder="Enter sales value e.g. 250"
-                    value={txAmount}
-                    onChange={(e) => setTxAmount(e.target.value)}
-                    className="block w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 text-sm"
-                  />
-                  {txAmount && !isNaN(parseFloat(txAmount)) && (
-                    <div className="text-xs text-gold font-semibold pt-1 flex items-center gap-1.5 animate-pulse">
-                      <Sparkles className="w-3.5 h-3.5" />
-                      Award points: +{calculatePoints(parseFloat(txAmount), vendor.points_rule_amount, vendor.points_rule_points)} Loyalty Points (based on active rules)
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={actionLoading}
-                  className="w-full mt-4 bg-primary text-primary-foreground py-3 rounded-xl font-bold hover:bg-gold/90 transition-all flex items-center justify-center gap-2 cursor-pointer text-sm gold-glow"
-                >
-                  {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Process Transaction"}
-                </button>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================
-          MODAL 3: ADD REWARD
-          ======================================================== */}
-      {isRewardModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md glass-panel rounded-3xl p-8 border border-white/10 shadow-2xl relative animate-fade-in">
-            <button 
-              onClick={() => setIsRewardModalOpen(false)}
-              className="absolute top-4 right-4 text-muted-foreground hover:text-white p-1 cursor-pointer"
-            >
-              <X className="w-6 h-6" />
-            </button>
-
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-white mb-1 flex items-center gap-2">
-                <Gift className="w-6 h-6 text-gold" />
-                Add Reward Tier
-              </h2>
-              <p className="text-muted text-xs">Define a reward coupon that customers can redeem with points.</p>
-            </div>
-
-            <form onSubmit={handleAddReward} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase block">Reward Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Free Masala Chai, 10% Off Grocery"
-                  value={newRewardName}
-                  onChange={(e) => setNewRewardName(e.target.value)}
-                  className="block w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 text-sm"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase block">Points Required</label>
-                <input
-                  type="number"
-                  required
-                  min="5"
-                  placeholder="e.g. 50"
-                  value={newRewardPoints}
-                  onChange={(e) => setNewRewardPoints(e.target.value)}
-                  className="block w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 text-sm"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-muted-foreground uppercase block">Description / Terms</label>
-                <textarea
-                  placeholder="Describe details e.g. Valid on minimum purchase of Rs 500."
-                  value={newRewardDesc}
-                  onChange={(e) => setNewRewardDesc(e.target.value)}
-                  rows={3}
-                  className="block w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 text-sm resize-none"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={actionLoading}
-                className="w-full mt-4 bg-primary text-primary-foreground py-3 rounded-xl font-bold hover:bg-gold/90 transition-all flex items-center justify-center gap-2 cursor-pointer text-sm gold-glow"
-              >
-                {actionLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Save Reward Tier"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -3,9 +3,7 @@ import { supabase } from "../lib/supabase";
 import { useLocation, Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { 
-  Mail, Lock, Loader2, ArrowLeft, Star, AlertCircle 
-} from "lucide-react";
+import { Mail, Lock, Loader2, Star, AlertCircle } from "lucide-react";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -16,14 +14,20 @@ export default function Login() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  const { user, loading: authLoading } = useAuth();
+  const { user, profile, loading: authLoading } = useAuth();
 
-  // Redirect to dashboard if user is already logged in
+  // Redirect based on role if logged in
   useEffect(() => {
-    if (!authLoading && user) {
-      setLocation("/dashboard");
+    if (!authLoading && user && profile) {
+      if (profile.role === "admin") {
+        setLocation("/admin");
+      } else if (profile.role === "vendor") {
+        setLocation("/dashboard");
+      } else {
+        setLocation("/");
+      }
     }
-  }, [user, authLoading, setLocation]);
+  }, [user, profile, authLoading, setLocation]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -46,11 +50,8 @@ export default function Login() {
 
       toast({
         title: "Welcome Back!",
-        description: "Successfully logged in. Redirecting to dashboard...",
+        description: "Successfully logged in.",
       });
-
-      setLocation("/dashboard");
-
     } catch (err: any) {
       console.error("Login failed:", err);
       setError(err.message || "An unexpected error occurred during login.");
@@ -89,7 +90,6 @@ export default function Login() {
       });
 
       setIsForgotPassword(false);
-
     } catch (err: any) {
       console.error("Reset password error:", err);
       setError(err.message || "Could not request password reset.");
@@ -105,59 +105,52 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans flex flex-col relative overflow-hidden">
-      {/* Background Decorative Glow Elements */}
+      
+      {/* Decorative Glows */}
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue/10 rounded-full blur-3xl pointer-events-none"></div>
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-gold/10 rounded-full blur-3xl pointer-events-none"></div>
 
-      {/* TOP NAVIGATION / LOGO */}
-      <header className="absolute top-0 left-0 right-0 z-50 px-6 py-6 max-w-6xl mx-auto flex items-center justify-end">
-        <Link href="/" className="flex items-center gap-2">
-          <div className="text-gold font-bold text-2xl flex items-center">
-            <span className="text-white">Vend</span><span className="text-gold">ly</span>
-          </div>
-          <Star className="text-gold fill-gold h-5 w-5 animate-pulse" />
+      {/* HEADER LOGO */}
+      <header className="absolute top-0 left-0 right-0 z-50 px-6 py-6 max-w-6xl mx-auto flex items-center justify-between">
+        <Link href="/" className="font-bold text-2xl flex items-center cursor-pointer">
+          <span className="text-white">Vend</span><span className="text-gold">ly</span>
+          <Star className="text-gold fill-gold h-5 w-5 ml-1" />
         </Link>
       </header>
 
-      {/* CARD */}
+      {/* LOGIN CARD */}
       <div className="flex-1 flex items-center justify-center pt-28 pb-16 px-4 z-10">
         <div className="w-full max-w-md glass-panel rounded-3xl p-8 md:p-10 border border-white/10 shadow-2xl relative">
           
           {isForgotPassword ? (
-            /* FORGOT PASSWORD FORM */
             <>
               <div className="text-center mb-8">
-                <h1 className="text-3xl font-extrabold text-white mb-2">
-                  Reset Password
-                </h1>
-                <p className="text-muted text-sm">
-                  Enter your email address and we'll send you a link to reset your password.
+                <h1 className="text-2xl font-extrabold text-white mb-2">Reset Password</h1>
+                <p className="text-muted text-xs">
+                  Enter your email address and we'll send you a password reset link.
                 </p>
               </div>
 
               {error && (
-                <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex gap-3 items-start text-red-200 text-sm animate-shake">
+                <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex gap-3 items-start text-red-200 text-sm">
                   <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
                   <div>{error}</div>
                 </div>
               )}
 
-              <form onSubmit={handleForgotPassword} className="space-y-5">
+              <form onSubmit={handleForgotPassword} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
                     Email Address
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <Mail className="h-5 w-5 text-muted-foreground" />
-                    </div>
                     <input
                       type="email"
                       required
-                      placeholder="e.g. rajesh@example.com"
+                      placeholder="e.g. varun@example.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="block w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all text-sm"
+                      className="block w-full pl-4 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 text-sm"
                     />
                   </div>
                 </div>
@@ -165,66 +158,51 @@ export default function Login() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-6 bg-primary text-primary-foreground py-3.5 rounded-xl font-bold hover:bg-gold/90 transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-60 disabled:hover:scale-100 disabled:cursor-not-allowed gold-glow text-sm"
+                  className="w-full mt-2 bg-primary text-primary-foreground py-3 rounded-xl font-bold hover:bg-gold/90 transition-all flex items-center justify-center gap-2 cursor-pointer text-sm gold-glow"
                 >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Sending Link...
-                    </>
-                  ) : (
-                    "Send Reset Link"
-                  )}
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Send Reset Link"}
                 </button>
               </form>
 
-              <div className="mt-8 text-center text-sm">
+              <div className="mt-6 text-center">
                 <button 
                   onClick={() => { setIsForgotPassword(false); setError(null); }}
-                  className="text-gold font-bold hover:underline"
+                  className="text-xs text-gold font-bold hover:underline"
                 >
                   Cancel and Log In
                 </button>
               </div>
             </>
           ) : (
-            /* STANDARD LOGIN FORM */
             <>
               <div className="text-center mb-8">
-                <h1 className="text-3xl font-extrabold text-white mb-2">
-                  Vendor Login
-                </h1>
-                <p className="text-muted text-sm">
-                  Log in to manage your loyalty platform and customer database.
+                <h1 className="text-3xl font-extrabold text-white mb-2">Welcome to Vendly</h1>
+                <p className="text-muted text-xs">
+                  Log in to access products, checkouts, store settings, or platform analytics.
                 </p>
               </div>
 
               {error && (
-                <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex gap-3 items-start text-red-200 text-sm animate-shake">
+                <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/20 flex gap-3 items-start text-red-200 text-sm">
                   <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
                   <div>{error}</div>
                 </div>
               )}
 
-              <form onSubmit={handleLogin} className="space-y-5">
-                {/* Email Address */}
+              <form onSubmit={handleLogin} className="space-y-4">
+                {/* Email */}
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
                     Email Address
                   </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <Mail className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <input
-                      type="email"
-                      required
-                      placeholder="e.g. rajesh@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="block w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all text-sm"
-                    />
-                  </div>
+                  <input
+                    type="email"
+                    required
+                    placeholder="e.g. ravi@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="block w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 text-sm"
+                  />
                 </div>
 
                 {/* Password */}
@@ -236,64 +214,36 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() => { setIsForgotPassword(true); setError(null); }}
-                      className="text-xs text-gold hover:underline font-semibold"
+                      className="text-[10px] text-gold hover:underline font-bold uppercase tracking-wider"
                     >
                       Forgot Password?
                     </button>
                   </div>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <Lock className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <input
-                      type="password"
-                      required
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="block w-full pl-11 pr-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 transition-all text-sm"
-                    />
-                  </div>
+                  <input
+                    type="password"
+                    required
+                    placeholder="Enter password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="block w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-muted-foreground focus:outline-none focus:border-gold focus:ring-2 focus:ring-gold/20 text-sm"
+                  />
                 </div>
 
-                {/* Submit Button */}
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-6 bg-primary text-primary-foreground py-3.5 rounded-xl font-bold hover:bg-gold/90 transition-all duration-300 hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-60 disabled:hover:scale-100 disabled:cursor-not-allowed gold-glow text-sm"
+                  className="w-full mt-4 bg-primary text-primary-foreground py-3 rounded-xl font-bold hover:bg-gold/90 transition-all flex items-center justify-center gap-2 cursor-pointer text-sm gold-glow"
                 >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                      Logging in...
-                    </>
-                  ) : (
-                    "Log In"
-                  )}
+                  {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : "Sign In"}
                 </button>
               </form>
 
-              {/* Toggle to Register */}
-              <div className="mt-8 text-center text-sm text-muted-foreground space-y-3">
+              <div className="mt-8 text-center text-xs text-muted-foreground space-y-3">
                 <div>
-                  Don't have a vendor account yet?{" "}
-                  <Link href="/register" className="text-gold font-bold hover:underline">
-                    Sign Up
+                  New to Vendly?{" "}
+                  <Link href="/register" className="text-gold font-bold hover:underline cursor-pointer">
+                    Create Account
                   </Link>
-                </div>
-                <div className="pt-4 border-t border-white/5 flex flex-col gap-2">
-                  <div>
-                    Are you a customer?{" "}
-                    <Link href="/customer/login" className="text-gold font-bold hover:underline">
-                      Sign In here
-                    </Link>
-                  </div>
-                  <div>
-                    Want to register as a customer?{" "}
-                    <Link href="/customer/register" className="text-gold font-bold hover:underline">
-                      Sign Up here
-                    </Link>
-                  </div>
                 </div>
               </div>
             </>
